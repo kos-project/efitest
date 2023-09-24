@@ -13,5 +13,12 @@
 
 #include <efitest/efitest.h>
 
-ETEST(test_success) {
+ETEST_DEFINE_TEST(test_success) {
+    ETEST_ASSERT(TRUE);
+    efitest_log(L"TEST %a RUNNING..", ETEST_TEST_NAME);
+}
+
+ETEST_DEFINE_TEST(test_failure) {
+    ETEST_ASSERT(FALSE);
+    efitest_log(L"TEST %a RUNNING..", ETEST_TEST_NAME);
 }

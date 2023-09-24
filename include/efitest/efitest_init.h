@@ -23,6 +23,6 @@
 
 ETEST_API_BEGIN
 
-void efitest_init(EFITestContext* context);
+void efitest_run_tests(EFITestContext* context);
 
 ETEST_API_END

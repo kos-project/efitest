@@ -13,6 +13,8 @@
 
 #pragma once
 
+#define ETEST_INLINE __attribute__((always_inline))
+
 #ifdef __cplusplus
 #define ETEST_API_BEGIN extern "C" {
 #define ETEST_API_END }

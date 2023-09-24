@@ -32,15 +32,20 @@
 #include <cxxopts.hpp>
 #include <fmt/format.h>
 
+struct Test {
+    std::string name;
+    size_t line_number = 0;
+};
+
 struct Target {
     std::filesystem::path source_path;
     std::filesystem::path header_path {};
-    std::vector<std::string> tests {};
+    std::vector<Test> tests {};
 };
 
 using namespace std::string_literals;
 
-static inline const std::string MACRO = "ETEST";
+static inline const std::string MACRO = "ETEST_DEFINE_TEST";
 static inline const std::string INIT_FILE_NAME = "init.c";
 static inline const std::string INCLUDE = "include";
 
@@ -62,7 +67,7 @@ inline auto write_file(const std::filesystem::path& path) noexcept -> std::ofstr
     return stream;
 }
 
-auto compute_function_name(const Target& target, const std::string& test_name) noexcept -> std::string {
+auto compute_function_name(const Target& target, const Test& test) noexcept -> std::string {
     auto prefix = target.source_path.filename().string();
     if(prefix.contains('.')) {
         auto begin = prefix.begin();
@@ -73,7 +78,7 @@ auto compute_function_name(const Target& target, const std::string& test_name) n
         }
         prefix = {begin, current};
     }
-    return fmt::format("__{}_{}", prefix, test_name);
+    return fmt::format("__{}_{}", prefix, test.name);
 }
 
 auto compute_header_path(const std::filesystem::path& out_dir, Target& target) noexcept -> void {
@@ -89,12 +94,11 @@ auto compute_header_path(const std::filesystem::path& out_dir, Target& target) n
     }
     header_name += ".h";
     target.header_path = out_dir / header_name;
-    fmt::println("Computed header path: {}", target.header_path.string());
 }
 
-auto discover_tests(const std::filesystem::path& path) noexcept -> std::vector<std::string> {// NOLINT
+auto discover_tests(const std::filesystem::path& path) noexcept -> std::vector<Test> {// NOLINT
     auto source = read_file(path);
-    std::vector<std::string> tests {};
+    std::vector<Test> tests {};
     auto current = source.begin();
     auto end = source.end();
 
@@ -114,19 +118,22 @@ auto discover_tests(const std::filesystem::path& path) noexcept -> std::vector<s
             while(current != end && *current != ')') {
                 ++current;// Skip until we reach end of macro
             }
-            tests.emplace_back(name_begin, current);
+
+            const auto line_number = std::count(source.begin(), name_begin, '\n') + 1;
+            tests.emplace_back(std::string {name_begin, current}, line_number);
         }
         ++current;
     }
 
     for(auto& test : tests) {
-        while(test.contains('\n') || test.contains('\t')) {
-            current = test.begin();
-            end = test.end();
+        auto& name = test.name;
+        while(name.contains('\n') || name.contains('\t')) {
+            current = name.begin();
+            end = name.end();
             while(current != end) {
                 const auto current_char = *current;
                 if(current_char == '\n' || current_char == '\t') {
-                    test.erase(current);
+                    name.erase(current);
                     goto outer;
                 }
                 ++current;
@@ -162,13 +169,25 @@ auto inject_trampolines(const std::filesystem::path& out_dir, const std::vector<
 
         const auto out_path = out_dir / source_path.filename();
         auto stream = write_file(out_path);
-        stream << read_file(source_path);
+        stream << read_file(source_path) << '\n';
+        stream << "// ========== BEGIN INJECTED CODE ==========\n\n";
         stream << fmt::format("#include \"{}\"\n\n", target.header_path.filename().string());
 
         for(const auto& test : tests) {
+            const auto& test_name = test.name;
             auto trampoline_source =
                     fmt::format("void {}(EFITestContext* context) {{\n", compute_function_name(target, test));
-            trampoline_source += fmt::format("\t{}(context);\n", test);
+
+            // Update context when trampoline is called
+            trampoline_source += fmt::format("\tcontext->test_name = \"{}\";\n", test_name);
+            trampoline_source += fmt::format("\tcontext->file_name = \"{}\";\n", source_path.string());
+            trampoline_source += fmt::format("\tcontext->line_number = {};\n", test.line_number);
+
+            // Add pre- and post-test hooks before and after bouncing the call
+            trampoline_source += "\tefitest_pre_run_test(context);\n";
+            trampoline_source += fmt::format("\t{}(context);\n", test_name);
+            trampoline_source += "\tefitest_post_run_test(context);\n";
+
             trampoline_source += "}\n";
             stream << trampoline_source << '\n';
         }
@@ -181,7 +200,7 @@ auto generate_init_source(const std::filesystem::path& path, const std::vector<T
     }
 
     std::vector<std::string> includes {};
-    std::string function = "void efitest_init(EFITestContext* context) {\n";
+    std::string function = "void efitest_run_tests(EFITestContext* context) {\n";
     for(const auto& target : targets) {
         includes.push_back(fmt::format("#include \"{}\"", target.header_path.filename().string()));
 
@@ -198,12 +217,9 @@ auto generate_init_source(const std::filesystem::path& path, const std::vector<T
     }
     stream << '\n';
     stream << function;
-
-    fmt::println("Generated init source: {}", path.string());
 }
 
-auto process_sources(const std::filesystem::path& out_dir, const std::vector<Target>& targets,
-                     const std::vector<std::filesystem::path>& files) noexcept -> void {
+auto process_sources(const std::filesystem::path& out_dir, const std::vector<Target>& targets) noexcept -> void {
     if(!std::filesystem::exists(out_dir)) {
         std::filesystem::create_directories(out_dir);
     }
@@ -259,9 +275,14 @@ auto main(int num_args, char** args) -> int {
 
         const auto end_time = std::chrono::system_clock::now();
         const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-        fmt::println("Discovered {} tests in {}ms", targets.size(), time);
 
-        process_sources(out_path, targets, files);
+        size_t num_tests = 0;
+        for(const auto& target : targets) {
+            num_tests += target.tests.size();
+        }
+        fmt::println("Discovered {} tests in {}ms", num_tests, time);
+
+        process_sources(out_path, targets);
     }
     catch(...) {
         fmt::println("Could not parse arguments, try -h to get help");
