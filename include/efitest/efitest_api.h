@@ -11,6 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/**
+ * @author Alexander Hinze
+ * @since 24/09/2023
+ */
+
 #pragma once
 
 #define ETEST_INLINE __attribute__((always_inline))

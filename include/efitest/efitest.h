@@ -11,14 +11,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/**
+ * @author Alexander Hinze
+ * @since 24/09/2023
+ */
+
 #pragma once
 
 #include "efitest_api.h"
 
 typedef struct _EFITestContext {
-    const char* test_name;// The name of the current test being run
-    const char* file_name;// The name of the file the test is defined in
-    UINTN line_number;    // The line number where the function is defined
+    const char* test_name; // The name of the current test being run
+    const char* file_path; // The absolute path to the source file the test is defined in
+    const char* file_name; // The name of the file the test is defined in
+    const char* group_name;// The name of the test group the current test is part of
+    UINTN group_size;      // The total number of tests within the current group
+    UINTN group_index;     // The index of the current test within the current group
+    UINTN line_number;     // The line number where the function is defined
+    BOOLEAN failed;        // Determines if the test has failed
 } EFITestContext;
 
 /*
@@ -41,16 +51,34 @@ typedef struct _EFITestContext {
 // Utilities
 #define ETEST_TEST_NAME context->test_name
 #define ETEST_FILE_NAME context->file_name
+#define ETEST_FILE_PATH context->file_path
+#define ETEST_GROUP_NAME context->group_name
+#define ETEST_GROUP_SIZE context->group_size
+#define ETEST_GROUP_INDEX context->group_index
 #define ETEST_LINE_NUMBER context->line_number
+#define ETEST_FAILED context->failed
 
 ETEST_API_BEGIN
 
-void efitest_pre_run_test(EFITestContext* context);
-void efitest_post_run_test(EFITestContext* context);
+typedef void (*EFITestCallback)(const EFITestContext* context);
+typedef void (*EFITestRunCallback)();
+
+void efitest_on_pre_run_test(EFITestContext* context);
+void efitest_on_post_run_test(EFITestContext* context);
+void efitest_on_pre_run_group(EFITestContext* context);
+void efitest_on_post_run_group(EFITestContext* context);
 
 void efitest_assert(BOOLEAN condition, EFITestContext* context);
-
 void efitest_log_v(const UINT16* format, va_list args);
 void efitest_log(const UINT16* format, ...);
+
+void efitest_set_pre_run_callback(EFITestRunCallback callback);
+void efitest_set_post_run_callback(EFITestRunCallback callback);
+
+void efitest_set_pre_group_callback(EFITestCallback callback);
+void efitest_set_post_group_callback(EFITestCallback callback);
+
+void efitest_set_pre_test_callback(EFITestCallback callback);
+void efitest_set_post_test_callback(EFITestCallback callback);
 
 ETEST_API_END

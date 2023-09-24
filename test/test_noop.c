@@ -18,10 +18,5 @@
 
 #include <efitest/efitest.h>
 
-ETEST_DEFINE_TEST(test_success) {
-    ETEST_ASSERT(TRUE);
-}
-
-ETEST_DEFINE_TEST(test_failure) {
-    ETEST_ASSERT(FALSE);
+ETEST_DEFINE_TEST(test_noop) {
 }

@@ -22,7 +22,7 @@ macro(efitest_add_tests target access)
         list(APPEND all_source_files ${source_files})
     endforeach ()
 
-    string(REPLACE ";" " " file_flags "${all_source_files}")
+    string(REPLACE ";" "," file_flags "${all_source_files}")
     string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type)
     set(build_dir "efitest-${build_type}")
     set(build_dir_path "${CMAKE_CURRENT_SOURCE_DIR}/${build_dir}")
@@ -50,7 +50,7 @@ macro(efitest_add_tests target access)
     add_custom_target("${target}-efitest-discovery" ALL
             WORKING_DIRECTORY "${build_dir_path}")
     add_custom_command(TARGET "${target}-efitest-discovery"
-            COMMAND efitest-discoverer -o "${generated_dir_path}/src" -f "${file_flags}"
+            COMMAND efitest-discoverer -o "${generated_dir_path}/src" -f ${file_flags}
             WORKING_DIRECTORY "${build_dir_path}")
     add_dependencies("${target}-efitest-discovery" "${target}-efitest-prebuild")
 

@@ -67,31 +67,27 @@ inline auto write_file(const std::filesystem::path& path) noexcept -> std::ofstr
     return stream;
 }
 
-auto compute_function_name(const Target& target, const Test& test) noexcept -> std::string {
-    auto prefix = target.source_path.filename().string();
-    if(prefix.contains('.')) {
-        auto begin = prefix.begin();
-        auto end = prefix.end();
-        auto current = prefix.begin();
+inline auto strip_extension(std::string& file_name) noexcept -> void {
+    if(file_name.contains('.')) {
+        auto begin = file_name.begin();
+        auto end = file_name.end();
+        auto current = file_name.begin();
         while(current != end && *current != '.') {
             ++current;
         }
-        prefix = {begin, current};
+        file_name = {begin, current};
     }
+}
+
+auto compute_function_name(const Target& target, const Test& test) noexcept -> std::string {
+    auto prefix = target.source_path.filename().string();
+    strip_extension(prefix);
     return fmt::format("__{}_{}", prefix, test.name);
 }
 
 auto compute_header_path(const std::filesystem::path& out_dir, Target& target) noexcept -> void {
     auto header_name = target.source_path.filename().string();
-    if(header_name.contains('.')) {
-        auto begin = header_name.begin();
-        auto end = header_name.end();
-        auto current = header_name.begin();
-        while(current != end && *current != '.') {
-            ++current;
-        }
-        header_name = {begin, current};
-    }
+    strip_extension(header_name);
     header_name += ".h";
     target.header_path = out_dir / header_name;
 }
@@ -101,8 +97,43 @@ auto discover_tests(const std::filesystem::path& path) noexcept -> std::vector<T
     std::vector<Test> tests {};
     auto current = source.begin();
     auto end = source.end();
+    auto is_inline_comment = false;
+    auto is_block_comment = false;
 
     while(current != end) {
+        // Handle exiting block comment state
+        if(is_block_comment) {
+            const auto next = std::next(current);
+            if(*current == '*' && next != end && *next == '/') {
+                is_block_comment = false;
+                ++current;
+            }
+            ++current;
+            continue;
+        }
+        // Handle exiting inline comment state
+        if(is_inline_comment) {
+            if(*current == '\n') {
+                is_inline_comment = false;
+            }
+            ++current;
+            continue;
+        }
+        // Handle entering block- or inline comment state
+        const auto next = std::next(current);
+        if(*current == '/' && next != end) {
+            switch(*next) {
+                case '*':
+                    is_block_comment = true;
+                    current += 2;// Skip over /* to save some travel
+                    continue;
+                case '/':
+                    is_inline_comment = true;
+                    current += 2;// Skip over // to save some travel
+                    continue;
+            }
+        }
+
         const std::string_view view {current, end};
         if(view.starts_with(MACRO)) {
             current += static_cast<ptrdiff_t>(MACRO.size());
@@ -122,6 +153,7 @@ auto discover_tests(const std::filesystem::path& path) noexcept -> std::vector<T
             const auto line_number = std::count(source.begin(), name_begin, '\n') + 1;
             tests.emplace_back(std::string {name_begin, current}, line_number);
         }
+
         ++current;
     }
 
@@ -166,6 +198,7 @@ auto inject_trampolines(const std::filesystem::path& out_dir, const std::vector<
     for(const auto& target : targets) {
         const auto& source_path = target.source_path;
         const auto& tests = target.tests;
+        const auto num_tests = tests.size();
 
         const auto out_path = out_dir / source_path.filename();
         auto stream = write_file(out_path);
@@ -173,23 +206,24 @@ auto inject_trampolines(const std::filesystem::path& out_dir, const std::vector<
         stream << "// ========== BEGIN INJECTED CODE ==========\n\n";
         stream << fmt::format("#include \"{}\"\n\n", target.header_path.filename().string());
 
-        for(const auto& test : tests) {
+        for(size_t index = 0; index < num_tests; ++index) {
+            const auto& test = tests[index];
             const auto& test_name = test.name;
-            auto trampoline_source =
-                    fmt::format("void {}(EFITestContext* context) {{\n", compute_function_name(target, test));
+            auto function = fmt::format("void {}(EFITestContext* context) {{\n", compute_function_name(target, test));
 
             // Update context when trampoline is called
-            trampoline_source += fmt::format("\tcontext->test_name = \"{}\";\n", test_name);
-            trampoline_source += fmt::format("\tcontext->file_name = \"{}\";\n", source_path.string());
-            trampoline_source += fmt::format("\tcontext->line_number = {};\n", test.line_number);
+            function += fmt::format("\tcontext->test_name = \"{}\";\n", test_name);
+            function += fmt::format("\tcontext->line_number = {};\n", test.line_number);
+            function += fmt::format("\tcontext->group_index = {};\n", index);
+            function += "\tcontext->failed = FALSE;\n";// Reset passed state
 
             // Add pre- and post-test hooks before and after bouncing the call
-            trampoline_source += "\tefitest_pre_run_test(context);\n";
-            trampoline_source += fmt::format("\t{}(context);\n", test_name);
-            trampoline_source += "\tefitest_post_run_test(context);\n";
+            function += "\tefitest_on_pre_run_test(context);\n";
+            function += fmt::format("\t{}(context);\n", test_name);
+            function += "\tefitest_on_post_run_test(context);\n";
 
-            trampoline_source += "}\n";
-            stream << trampoline_source << '\n';
+            function += "}\n";
+            stream << function << '\n';
         }
     }
 }
@@ -202,12 +236,24 @@ auto generate_init_source(const std::filesystem::path& path, const std::vector<T
     std::vector<std::string> includes {};
     std::string function = "void efitest_run_tests(EFITestContext* context) {\n";
     for(const auto& target : targets) {
+        const auto& tests = target.tests;
         includes.push_back(fmt::format("#include \"{}\"", target.header_path.filename().string()));
 
-        const auto& tests = target.tests;
+        // Update per-target context information
+        const auto& source_path = target.source_path;
+        const auto file_name = source_path.filename().string();
+        auto stripped_file_name = file_name;
+        strip_extension(stripped_file_name);
+        function += fmt::format("\tcontext->file_path = \"{}\";\n", source_path.string());
+        function += fmt::format("\tcontext->file_name = \"{}\";\n", file_name);
+        function += fmt::format("\tcontext->group_name = \"{}\";\n", stripped_file_name);
+        function += fmt::format("\tcontext->group_size = {};\n", tests.size());
+
+        function += "\tefitest_on_pre_run_group(context);\n";
         for(const auto& test : tests) {
             function += fmt::format("\t{}(context);\n", compute_function_name(target, test));
         }
+        function += "\tefitest_on_post_run_group(context);\n";
     }
     function += '}';
 
@@ -236,10 +282,11 @@ auto main(int num_args, char** args) -> int {
     cxxopts::Options options {"EFITEST Discoverer", "Test discovery service for the EFITEST framework"};
     // clang-format off
     options.add_options()
-            ("f,files", "Specifies the path to a file to scan for tests", cxxopts::value<std::vector<std::string>>())
+            ("v,version", "Print the current version of this")
             ("o,out", "Specifies the path of the directory to generate sources into", cxxopts::value<std::string>())
-            ("v,version", "Print the current version of this");
+            ("f,files", "Specifies the path to a file to scan for tests", cxxopts::value<std::vector<std::string>>());
     // clang-format on
+    options.parse_positional({"out", "files"});
 
     try {
         const auto result = options.parse(num_args, args);
