@@ -56,7 +56,7 @@ macro(efitest_add_tests target access)
             COMMAND ${CMAKE_COMMAND} -S . -B "build" -G "Unix Makefiles"
                 -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                 -DTARGET_NAME="${target}"
-                -DPARENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -DPARENT_SOURCE_DIR=${EFITEST_SOURCE_DIR}
                 -DPARENT_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
             WORKING_DIRECTORY ${generated_dir_path})
     add_custom_command(TARGET ${target}
