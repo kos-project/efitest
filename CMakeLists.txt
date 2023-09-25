@@ -4,6 +4,8 @@ project(efitest LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 23)
 
+option(EFITEST_BUILD_TESTS "Build unit tests for libefitest" OFF)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(cmx-bootstrap)
 include(cmx-efi)
@@ -26,4 +28,6 @@ if ((CMX_COMPILER_GCC OR CMX_COMPILER_CLANG) AND CMX_CPU_X86 AND CMX_CPU_64_BIT)
 	target_compile_options(efitest PUBLIC -march=x86-64-v3) # Enable SSE/AVX
 endif ()
 
-efitest_add_tests(efitest-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/test")
+if (EFITEST_BUILD_TESTS)
+	efitest_add_tests(efitest-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/test")
+endif()
