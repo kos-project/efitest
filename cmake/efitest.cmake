@@ -6,18 +6,13 @@ macro(efitest_add_tests target access)
         message(FATAL_ERROR "Could not find grep, please make sure to install it")
     endif()
 
-    message(STATUS "")
-    message(STATUS "=============== EFITEST ===============")
-
     # Find out number of cores in the machine
     execute_process(COMMAND ${GREP} -c ^processor /proc/cpuinfo
             OUTPUT_VARIABLE num_threads)
     string(REGEX REPLACE "\n+$" "" num_threads "${num_threads}")
-    message(STATUS "Detected ${num_threads} threads for EFITEST sub-build")
 
     # Search for test source files recursively
     foreach (directory IN ITEMS ${ARGN})
-        message(STATUS "Walking ${directory}")
         file(GLOB_RECURSE source_files "${directory}/*.c*")
         list(APPEND all_source_files ${source_files})
     endforeach ()
@@ -79,7 +74,4 @@ macro(efitest_add_tests target access)
     endforeach ()
     add_library("${target}-efitest-dummy" STATIC ${${target}_source_files})
     target_link_libraries("${target}-efitest-dummy" PRIVATE efitest)
-
-    message(STATUS "=======================================")
-    message(STATUS "")
 endmacro()
