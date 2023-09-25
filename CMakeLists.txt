@@ -9,7 +9,6 @@ include(cmx-bootstrap)
 include(cmx-efi)
 
 set(EFITEST_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
-set(EFITEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
 include(efitest)
 
 file(GLOB_RECURSE EFITEST_SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c")
