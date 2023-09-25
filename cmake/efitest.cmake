@@ -32,7 +32,7 @@ macro(efitest_add_tests target access)
     if (NOT EXISTS "${generated_dir_path}")
         file(MAKE_DIRECTORY "${generated_dir_path}")
     endif ()
-    file(COPY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/efitest-build.cmake" "${generated_dir_path}/CMakeLists.txt")
+    file(COPY_FILE "${EFITEST_SOURCE_DIR}/cmake/efitest-build.cmake" "${generated_dir_path}/CMakeLists.txt")
 
     # Pre-build discoverer if required
     add_custom_target("${target}-efitest-prebuild" ALL
@@ -42,7 +42,7 @@ macro(efitest_add_tests target access)
                 -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                 -DCMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
                 -DCMAKE_CURRENT_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
-                -P "cmake/efitest-prebuild.cmake"
+                -P "${EFITEST_SOURCE_DIR}/cmake/efitest-prebuild.cmake"
             BYPRODUCTS "${build_dir}/efitest-discoverer"
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
