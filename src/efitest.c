@@ -17,8 +17,9 @@
  */
 
 #include "efitest/efitest.h"
+#include "code_renderer.h"
 #include "efitest/efitest_init.h"
-#include "utils.h"
+#include "efitest/efitest_utils.h"
 
 // NOLINTBEGIN
 static const char* g_hex_chars = "0123456789ABCDEF";// Used for UUID string conversion
@@ -39,6 +40,28 @@ static UINT64 g_rand_z = 362436069;// Value suggested by author
 static UINT64 g_rand_w = 521288629;// Value suggested by author
 // NOLINTEND
 
+void cpu_yield() {
+#if defined(CPU_X86)
+    // https://www.amd.com/content/dam/amd/en/documents/processor-tech-docs/programmer-references/24593.pdf
+    // > Specifically section 6.5
+    __asm__ __volatile__("hlt");
+#elif defined(CPU_ARM)
+    // https://developer.arm.com/documentation/ka001283/latest
+    __asm__ __volatile__("wfi");
+#elif defined(CPU_RISCV)
+    // https://five-embeddev.com/riscv-isa-manual/latest/zihintpause.html
+    __asm__ __volatile__("pause");
+#else
+    /* NOP */
+#endif
+}
+
+_Noreturn static inline void cpu_halt() {
+    while(TRUE) {
+        cpu_yield();
+    }
+}
+
 /*
  * Implementation based on MWC generator described in
  * http://www.cse.yorku.ca/~oz/marsaglia-rng.html
@@ -50,22 +73,9 @@ UINT32 rand() {// clang-format off
     );
 }// clang-format on
 
-void yield_cpu() {
-#if defined(CPU_X86)
-    __asm__ __volatile__("hlt");
-#elif defined(CPU_ARM)
-    __asm__ __volatile__("wfi");
-#elif defined(CPU_RISCV)
-    __asm__ __volatile__("pause");
-#else
-    /* NOP */
-#endif
-}
-
-_Noreturn void halt_cpu() {
-    while(TRUE) {
-        yield_cpu();
-    }
+_Noreturn void shutdown() {
+    UEFI_CALL(ST->RuntimeServices->ResetSystem, EfiResetShutdown, EFI_SUCCESS, 0, NULL);
+    __builtin_unreachable();
 }
 
 void print_test_result(const EFITestContext* context) {
@@ -83,25 +93,7 @@ void print_test_result(const EFITestContext* context) {
 }
 
 void print_error(const EFITestError* error) {
-    char uuid_buffer[ETEST_UUID_LENGTH + 1];
-    uuid_buffer[ETEST_UUID_LENGTH] = '\0';
-    efitest_uuid_to_string(&(error->uuid), uuid_buffer);
-
-    const EFITestContext* context = &(error->context);
-
-    set_colors(EFI_RED);
-    Print(L"Assertion in test ");
-    set_colors(EFI_WHITE);
-    Print(L"%a ", context->test_name);
-    set_colors(EFI_RED);
-    Print(L"failed:\nExpression '");
-    set_colors(EFI_LIGHTCYAN);
-    Print(L"%a", error->expression);
-    set_colors(EFI_RED);
-    Print(L"' in ");
-    set_colors(EFI_LIGHTRED);
-    Print(L"%a:%lu\n\n", context->file_name, error->line_number);
-    reset_colors();
+    render_code(error->expression, error->line_number);
 }
 
 void print_test_results() {
@@ -118,7 +110,7 @@ void print_test_results() {
     Print(L"%lu/%lu tests passed in total\n\n", g_test_pass_count, g_test_count);
 }
 
-EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE* sys_table) {
+__attribute__((unused)) EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE* sys_table) {
     InitializeLib(image, sys_table);
     InitializeUnicodeSupport((UINT8*) "en-US");
 
@@ -143,7 +135,13 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE* sys_table) {
         g_post_run_callback();
     }
 
-    halt_cpu();
+    free(g_errors);
+    if(g_error_count == 0) {
+        shutdown();
+    }
+    else {
+        cpu_halt();
+    }
 }
 
 /*
@@ -309,7 +307,10 @@ const EFITestError* efitest_errors_get() {
 }
 
 const EFITestError* efitest_errors_get_last() {
-    return &(g_errors[g_error_count - 1]);
+    if(g_errors == NULL) {
+        return NULL;
+    }
+    return g_errors + (g_error_count - 1);
 }
 
 UINTN efitest_errors_get_count() {
@@ -317,7 +318,6 @@ UINTN efitest_errors_get_count() {
 }
 
 void efitest_errors_clear() {
-    free(g_errors);
     g_error_count = 0;
 }
 

@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "efitest/efitest.h"
+#include "efitest.h"
 
 #define UEFI_CALL(f, ...) uefi_call_wrapper(f, 0, ##__VA_ARGS__)
 
@@ -35,8 +35,13 @@
 #define malloc(size) malloc_impl(size)
 #define free(address) free_impl(address)
 #define realloc(address, size) realloc_impl(address, size)
-#define memcpy(dst, src, size) RtCopyMem(dst, src, size)
-#define memset(address, value, size) RtSetMem(address, value, size)
+#define memcpy(dst, src, size) CopyMem(dst, src, size)
+#define memset(address, value, size) SetMem(address, value, size)
+#define memcmp(addr1, addr2, size) CompareMem(addr1, addr2, size)
+
+#define strlen(x) strlena((const UINT8*) (x))
+#define strcmp(a, b) strcmpa((const UINT8*) a, (const UINT8*) b)
+#define arraylen(x) (sizeof(x) / sizeof(*x))
 
 static inline void reset_colors() {
     UEFI_CALL(ST->ConOut->SetAttribute, ST->ConOut, EFI_BACKGROUND_BLACK | EFI_LIGHTGRAY);
@@ -49,18 +54,19 @@ static inline void set_colors(UINTN colors) {
 static inline void* malloc_impl(UINTN size) {
     void* address = NULL;
     RETURN_IF_ERROR(UEFI_CALL(ST->BootServices->AllocatePool, EfiLoaderData, size + sizeof(UINTN), &address), NULL);
+    memset(address, 0, size);
     *((UINTN*) address) = size;
-    return address + sizeof(UINTN);
+    return ((UINT8*) address) + sizeof(UINTN);
 }
 
 static inline void free_impl(void* address) {
-    UEFI_CALL(ST->BootServices->FreePool, address - sizeof(UINTN));
+    UEFI_CALL(ST->BootServices->FreePool, ((UINT8*) address) - sizeof(UINTN));
 }
 
 static inline void* realloc_impl(void* address, UINTN size) {
     void* new_address = malloc(size);
     if(address != NULL) {
-        const UINTN old_size = *((const UINTN*) address - sizeof(UINTN));
+        const UINTN old_size = *(const UINTN*) (((const UINT8*) address) - sizeof(UINTN));
         memcpy(new_address, address, old_size);
         free(address);
     }

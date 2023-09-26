@@ -17,11 +17,36 @@
  */
 
 #include <efitest/efitest.h>
+#include <efitest/efitest_utils.h>
 
 ETEST_DEFINE_TEST(test_success) {
-    ETEST_ASSERT(4 == (2 << 1));
+    ETEST_ASSERT_EQ(4, (sizeof(UINT16) << 1));
 }
 
 ETEST_DEFINE_TEST(test_failure) {
-    ETEST_ASSERT(4 == (2 << 2));
+    ETEST_ASSERT_EQ(2, (sizeof(UINTN) << 2));
+}
+
+ETEST_DEFINE_TEST(test_string_compare_success) {
+    ETEST_ASSERT_NE("HELLO \"WORLD\"!", NULL);
+}
+
+ETEST_DEFINE_TEST(test_string_compare_failure) {
+    ETEST_ASSERT_EQ("HELLO \"WORLD\"!", NULL);
+}
+
+ETEST_DEFINE_TEST(test_wstring_compare_success) {
+    ETEST_ASSERT_NE(L"HELLO \"WORLD\"!", NULL);
+}
+
+ETEST_DEFINE_TEST(test_wstring_compare_failure) {
+    ETEST_ASSERT_EQ(L"HELLO \"WORLD\"!", NULL);
+}
+
+ETEST_DEFINE_TEST(test_ustring_compare_success) {
+    ETEST_ASSERT_NE(u8"HELLO \"WORLD\"!", NULL);
+}
+
+ETEST_DEFINE_TEST(test_ustring_compare_failure) {
+    ETEST_ASSERT_EQ(u8"HELLO \"WORLD\"!", NULL);
 }

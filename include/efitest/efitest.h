@@ -52,12 +52,12 @@ typedef struct _EFITestError {
 
 // Assertions
 #define ETEST_ASSERT(x) efitest_assert((x), context, __LINE__ - 4, #x)
-#define ETEST_ASSERT_EQ(a, b) ETEST_ASSERT((a) == (b))
-#define ETEST_ASSERT_NE(a, b) ETEST_ASSERT((a) != (b))
-#define ETEST_ASSERT_LT(a, b) ETEST_ASSERT((a) < (b))
-#define ETEST_ASSERT_LE(a, b) ETEST_ASSERT((a) <= (b))
-#define ETEST_ASSERT_GT(a, b) ETEST_ASSERT((a) > (b))
-#define ETEST_ASSERT_GE(a, b) ETEST_ASSERT((a) >= (b))
+#define ETEST_ASSERT_EQ(a, b) ETEST_ASSERT(a == b)
+#define ETEST_ASSERT_NE(a, b) ETEST_ASSERT(a != b)
+#define ETEST_ASSERT_LT(a, b) ETEST_ASSERT(a < b)
+#define ETEST_ASSERT_LE(a, b) ETEST_ASSERT(a <= b)
+#define ETEST_ASSERT_GT(a, b) ETEST_ASSERT(a > b)
+#define ETEST_ASSERT_GE(a, b) ETEST_ASSERT(a >= b)
 
 // Macros that can be used within the test
 #define ETEST_TEST_NAME (context->test_name)
