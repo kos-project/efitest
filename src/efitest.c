@@ -18,10 +18,10 @@
 
 #include "efitest/efitest.h"
 #include "efitest/efitest_init.h"
-
-#define ETEST_CALL(f, ...) uefi_call_wrapper(f, 0, ##__VA_ARGS__)
+#include "utils.h"
 
 // NOLINTBEGIN
+static const char* g_hex_chars = "0123456789ABCDEF";// Used for UUID string conversion
 static UINTN g_group_pass_count = 0;
 static UINTN g_test_count = 0;
 static UINTN g_test_pass_count = 0;
@@ -31,15 +31,23 @@ static EFITestCallback g_pre_group_callback = NULL;
 static EFITestCallback g_post_group_callback = NULL;
 static EFITestCallback g_pre_test_callback = NULL;
 static EFITestCallback g_post_test_callback = NULL;
+static EFITestError* g_errors = NULL;
+static UINTN g_error_count = 0;
+// RNG statae
+static UINT64 g_rand_z = 362436069;// Value suggested by author
+static UINT64 g_rand_w = 521288629;// Value suggested by author
 // NOLINTEND
 
-void reset_colors() {
-    ETEST_CALL(ST->ConOut->SetAttribute, ST->ConOut, EFI_BACKGROUND_BLACK | EFI_LIGHTGRAY);
-}
-
-void set_colors(UINTN colors) {
-    ETEST_CALL(ST->ConOut->SetAttribute, ST->ConOut, colors);
-}
+/*
+ * Implementation based on MWC generator described in
+ * http://www.cse.yorku.ca/~oz/marsaglia-rng.html
+ */
+UINT32 rand() {// clang-format off
+    return (
+        ((g_rand_z = 36969 * (g_rand_z & UINT16_MAX) + (g_rand_z >> UINT16_WIDTH)) << UINT16_WIDTH)
+        + (g_rand_w = 18000 * (g_rand_w & UINT16_MAX) + (g_rand_w >> UINT16_WIDTH))
+    );
+}// clang-format on
 
 void yield_cpu() {
 #if defined(CPU_X86)
@@ -73,6 +81,17 @@ void print_test_result(const EFITestContext* context) {
     reset_colors();
 }
 
+void print_errors() {
+    char uuid_buffer[ETEST_UUID_LENGTH + 1];
+    uuid_buffer[ETEST_UUID_LENGTH] = '\0';
+    for(UINTN index = 0; index < g_error_count; ++index) {
+        const EFITestError* error = &(g_errors[index]);
+        efitest_uuid_to_string(&(error->uuid), uuid_buffer);
+        Print(L"[------] Assertion %a failed:\n", uuid_buffer);
+        Print(L"[------] Expression '%a' in %a:%lu\n", error->expression, error->context.file_name, error->line_number);
+    }
+}
+
 void print_test_results() {
     Print(L"[------] Test run finished!\n");
     if(g_test_pass_count < g_test_count) {
@@ -84,14 +103,16 @@ void print_test_results() {
         Print(L"[--OK--] ");
     }
     reset_colors();
-    Print(L"%lu/%lu tests passed in total\n", g_test_pass_count, g_test_count);
+    Print(L"%lu/%lu tests passed in total\n\n", g_test_pass_count, g_test_count);
+    print_errors();
 }
 
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE* sys_table) {
     InitializeLib(image, sys_table);
     InitializeUnicodeSupport((UINT8*) "en-US");
-    ETEST_CALL(sys_table->BootServices->SetWatchdogTimer, 0, 0, 0, NULL);
-    ETEST_CALL(sys_table->ConOut->ClearScreen, sys_table->ConOut);
+
+    UEFI_CALL(sys_table->BootServices->SetWatchdogTimer, 0, 0, 0, NULL);
+    UEFI_CALL(sys_table->ConOut->ClearScreen, sys_table->ConOut);
 
     set_colors(EFI_BACKGROUND_BLUE | EFI_WHITE);
     Print(L"== EFITEST Integrated Testing Environment ==\n");
@@ -112,6 +133,54 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE* sys_table) {
     }
 
     halt_cpu();
+}
+
+/*
+ * Implementation based on the procedure described in
+ * https://www.cryptosys.net/pki/uuid-rfc4122.html
+ */
+void efitest_uuid_generate(EFITestUUID* value) {
+    for(UINT32 index = 0; index < 4; ++index) {
+        UINT32* data = &(value->data[index]);
+        *data = rand();// Generate 4 bytes at a time
+        switch(index) {
+            case 1: {
+                UINT8* byte_ptr = ((UINT8*) data) + 2;
+                // Replace high nibble with '4'
+                *byte_ptr = (*byte_ptr & 0b00001111) | 0b01000000;
+                break;
+            }
+            case 2: {
+                UINT8* byte_ptr = ((UINT8*) data);
+                // Replace two MSB with '10' so byte is '8', '9', 'A', 'B'
+                *byte_ptr = (*byte_ptr & 0b00111111) | 0b10000000;
+                break;
+            }
+        }
+    }
+}
+
+void efitest_uuid_to_string(const EFITestUUID* value, char* buffer) {
+    UINT8* data = (UINT8*) value->data;
+    for(UINT32 index = 0; index < 16; ++index) {
+        const UINT8 byte = data[index];
+        *(buffer++) = g_hex_chars[(byte & 0xFF) >> 4];
+        *(buffer++) = g_hex_chars[byte & 0x0F];
+        if(index == 3 || index == 5 || index == 7 || index == 9) {
+            *(buffer++) = '-';
+        }
+    }
+}
+
+BOOLEAN efitest_uuid_compare(const EFITestUUID* value1, const EFITestUUID* value2) {
+    const UINT32* data1 = value1->data;
+    const UINT32* data2 = value2->data;
+    for(UINT32 index = 0; index < 4; ++index) {
+        if(data1[index] != data2[index]) {
+            return FALSE;
+        }
+    }
+    return TRUE;
 }
 
 void efitest_on_pre_run_group(EFITestContext* context) {
@@ -162,8 +231,15 @@ void efitest_on_post_run_test(EFITestContext* context) {
     }
 }
 
-void efitest_assert(BOOLEAN condition, EFITestContext* context) {
-    context->failed = !condition;
+void efitest_assert(BOOLEAN condition, EFITestContext* context, UINTN line_number, const char* expression) {
+    if((context->failed = !condition)) {
+        EFITestError error;
+        efitest_uuid_generate(&(error.uuid));
+        error.context = *context;
+        error.line_number = line_number;
+        error.expression = expression;
+        efitest_errors_add(&error);
+    }
 }
 
 void efitest_log_v(const UINT16* format, va_list args) {
@@ -201,4 +277,40 @@ void efitest_set_pre_test_callback(EFITestCallback callback) {
 
 void efitest_set_post_test_callback(EFITestCallback callback) {
     g_post_test_callback = callback;
+}
+
+void efitest_errors_add(const EFITestError* error) {
+    const UINTN index = g_error_count++;
+    g_errors = realloc(g_errors, g_error_count * sizeof(EFITestError));
+    g_errors[index] = *error;
+}
+
+const EFITestError* efitest_errors_get() {
+    return g_errors;
+}
+
+UINTN efitest_errors_get_count() {
+    return g_error_count;
+}
+
+void efitest_errors_clear() {
+    free(g_errors);
+    g_error_count = 0;
+}
+
+BOOLEAN efitest_errors_compare(const EFITestError* error1, const EFITestError* error2) {
+    return efitest_uuid_compare(&(error1->uuid), &(error2->uuid));
+}
+
+BOOLEAN efitest_errors_get_index(const EFITestError* error, UINTN* index) {
+    for(UINTN curr_index = 0; curr_index < g_error_count; ++curr_index) {
+        EFITestError* current = &(g_errors[curr_index]);
+        if(!efitest_errors_compare(current, error)) {
+            continue;
+        }
+        *index = curr_index;
+        return TRUE;
+    }
+    *index = 0;
+    return FALSE;
 }

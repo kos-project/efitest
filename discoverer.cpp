@@ -92,6 +92,16 @@ auto compute_header_path(const std::filesystem::path& out_dir, Target& target) n
     target.header_path = out_dir / header_name;
 }
 
+template<typename I, typename F>
+inline auto consume_until(I& current, I& end, F&& predicate) -> void {
+    while(current != end && predicate(*current)) {
+        ++current;
+    }
+    if(current == end) {
+        throw std::runtime_error {"Unexpected EOF"};
+    }
+}
+
 auto discover_tests(const std::filesystem::path& path) noexcept -> std::vector<Test> {// NOLINT
     auto source = read_file(path);
     std::vector<Test> tests {};
@@ -137,18 +147,14 @@ auto discover_tests(const std::filesystem::path& path) noexcept -> std::vector<T
         const std::string_view view {current, end};
         if(view.starts_with(MACRO)) {
             current += static_cast<ptrdiff_t>(MACRO.size());
-            while(current != end && *current != '(') {
-                ++current;// Strip spaces between macro and open paren
-            }
-            if(current == end) {
-                fmt::println("Unexpected EOF");
-                break;
-            }
+
+            // clang-format off
+            consume_until(current, end, [](auto x) { return x != '('; }); // NOLINT
             ++current;
+            consume_until(current, end, [](auto x) { return x == ' '; }); // NOLINT
             const auto name_begin = current;
-            while(current != end && *current != ')') {
-                ++current;// Skip until we reach end of macro
-            }
+            consume_until(current, end, [](auto x) { return x == ' ' || x != ')'; }); // NOLINT
+            // clang-format on
 
             const auto line_number = std::count(source.begin(), name_begin, '\n') + 1;
             tests.emplace_back(std::string {name_begin, current}, line_number);
@@ -282,7 +288,8 @@ auto main(int num_args, char** args) -> int {
     cxxopts::Options options {"EFITEST Discoverer", "Test discovery service for the EFITEST framework"};
     // clang-format off
     options.add_options()
-            ("v,version", "Print the current version of this")
+            ("h,help", "Display a list of commands")
+            ("v,version", "Display version information")
             ("o,out", "Specifies the path of the directory to generate sources into", cxxopts::value<std::string>())
             ("f,files", "Specifies the path to a file to scan for tests", cxxopts::value<std::vector<std::string>>());
     // clang-format on
@@ -290,6 +297,11 @@ auto main(int num_args, char** args) -> int {
 
     try {
         const auto result = options.parse(num_args, args);
+
+        if(result.count("help") > 0) {
+            fmt::println("{}", options.help());
+            return 0;
+        }
 
         if(result.count("version") > 0) {
             fmt::println("EFITEST Discoverer 1.0.0");

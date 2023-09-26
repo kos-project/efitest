@@ -20,6 +20,10 @@
 
 #include "efitest_api.h"
 
+typedef struct _EFITestUUID {
+    UINT32 data[4];// 128 bits for a v4 UUID
+} EFITestUUID;
+
 typedef struct _EFITestContext {
     const char* test_name; // The name of the current test being run
     const char* file_path; // The absolute path to the source file the test is defined in
@@ -31,44 +35,57 @@ typedef struct _EFITestContext {
     BOOLEAN failed;        // Determines if the test has failed
 } EFITestContext;
 
+typedef struct _EFITestError {
+    EFITestUUID uuid;      // UUID for comparing errors
+    EFITestContext context;// Context captured in the moment of the error
+    const char* expression;// The code snippet which caused the error
+    UINTN line_number;     // The line number the assertion failed on
+} EFITestError;
+
 /*
  * Intrinsic macro recognized by the discoverer, don't change!
  * This macro defines a static function that is guaranteed to
  * be inlined. This is so the compiler can inline its code into
- * the generated trampoline function to prevent global scope pollution.
+ * the generated trampoline function to prevent symbol pollution.
  */
 #define ETEST_DEFINE_TEST(n) ETEST_INLINE static inline void n(EFITestContext* context)
 
 // Assertions
-#define ETEST_ASSERT(x) efitest_assert((x), context)
-#define ETEST_ASSERT_EQ(a, b) efitest_assert((a) == (b), context)
-#define ETEST_ASSERT_NE(a, b) efitest_assert((a) != (b), context)
-#define ETEST_ASSERT_LT(a, b) efitest_assert((a) < (b), context)
-#define ETEST_ASSERT_LE(a, b) efitest_assert((a) <= (b), context)
-#define ETEST_ASSERT_GT(a, b) efitest_assert((a) > (b), context)
-#define ETEST_ASSERT_GE(a, b) efitest_assert((a) >= (b), context)
+#define ETEST_ASSERT(x) efitest_assert((x), context, __LINE__ - 4, #x)
+#define ETEST_ASSERT_EQ(a, b) ETEST_ASSERT((a) == (b))
+#define ETEST_ASSERT_NE(a, b) ETEST_ASSERT((a) != (b))
+#define ETEST_ASSERT_LT(a, b) ETEST_ASSERT((a) < (b))
+#define ETEST_ASSERT_LE(a, b) ETEST_ASSERT((a) <= (b))
+#define ETEST_ASSERT_GT(a, b) ETEST_ASSERT((a) > (b))
+#define ETEST_ASSERT_GE(a, b) ETEST_ASSERT((a) >= (b))
 
-// Utilities
-#define ETEST_TEST_NAME context->test_name
-#define ETEST_FILE_NAME context->file_name
-#define ETEST_FILE_PATH context->file_path
-#define ETEST_GROUP_NAME context->group_name
-#define ETEST_GROUP_SIZE context->group_size
-#define ETEST_GROUP_INDEX context->group_index
-#define ETEST_LINE_NUMBER context->line_number
-#define ETEST_FAILED context->failed
+// Macros that can be used within the test
+#define ETEST_TEST_NAME (context->test_name)
+#define ETEST_FILE_NAME (context->file_name)
+#define ETEST_FILE_PATH (context->file_path)
+#define ETEST_GROUP_NAME (context->group_name)
+#define ETEST_GROUP_SIZE (context->group_size)
+#define ETEST_GROUP_INDEX (context->group_index)
+#define ETEST_LINE_NUMBER (context->line_number)
+#define ETEST_FAILED (context->failed)
+
+#define ETEST_UUID_LENGTH 36
 
 ETEST_API_BEGIN
 
 typedef void (*EFITestCallback)(const EFITestContext* context);
 typedef void (*EFITestRunCallback)();
 
+void efitest_uuid_generate(EFITestUUID* value);
+void efitest_uuid_to_string(const EFITestUUID* value, char* buffer);
+BOOLEAN efitest_uuid_compare(const EFITestUUID* value1, const EFITestUUID* value2);
+
 void efitest_on_pre_run_test(EFITestContext* context);
 void efitest_on_post_run_test(EFITestContext* context);
 void efitest_on_pre_run_group(EFITestContext* context);
 void efitest_on_post_run_group(EFITestContext* context);
 
-void efitest_assert(BOOLEAN condition, EFITestContext* context);
+void efitest_assert(BOOLEAN condition, EFITestContext* context, UINTN line_number, const char* expression);
 void efitest_log_v(const UINT16* format, va_list args);
 void efitest_log(const UINT16* format, ...);
 
@@ -80,5 +97,12 @@ void efitest_set_post_group_callback(EFITestCallback callback);
 
 void efitest_set_pre_test_callback(EFITestCallback callback);
 void efitest_set_post_test_callback(EFITestCallback callback);
+
+void efitest_errors_add(const EFITestError* error);
+const EFITestError* efitest_errors_get();
+UINTN efitest_errors_get_count();
+void efitest_errors_clear();
+BOOLEAN efitest_errors_compare(const EFITestError* error1, const EFITestError* error2);
+BOOLEAN efitest_errors_get_index(const EFITestError* error, UINTN* index);
 
 ETEST_API_END
