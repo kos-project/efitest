@@ -23,6 +23,7 @@
 // NOLINTBEGIN
 static const char* g_hex_chars = "0123456789ABCDEF";// Used for UUID string conversion
 static UINTN g_group_pass_count = 0;
+static UINTN g_group_error_count = 0;
 static UINTN g_test_count = 0;
 static UINTN g_test_pass_count = 0;
 static EFITestRunCallback g_pre_run_callback = NULL;
@@ -81,15 +82,26 @@ void print_test_result(const EFITestContext* context) {
     reset_colors();
 }
 
-void print_errors() {
+void print_error(const EFITestError* error) {
     char uuid_buffer[ETEST_UUID_LENGTH + 1];
     uuid_buffer[ETEST_UUID_LENGTH] = '\0';
-    for(UINTN index = 0; index < g_error_count; ++index) {
-        const EFITestError* error = &(g_errors[index]);
-        efitest_uuid_to_string(&(error->uuid), uuid_buffer);
-        Print(L"[------] Assertion %a failed:\n", uuid_buffer);
-        Print(L"[------] Expression '%a' in %a:%lu\n", error->expression, error->context.file_name, error->line_number);
-    }
+    efitest_uuid_to_string(&(error->uuid), uuid_buffer);
+
+    const EFITestContext* context = &(error->context);
+
+    set_colors(EFI_RED);
+    Print(L"Assertion in test ");
+    set_colors(EFI_WHITE);
+    Print(L"%a ", context->test_name);
+    set_colors(EFI_RED);
+    Print(L"failed:\nExpression '");
+    set_colors(EFI_LIGHTCYAN);
+    Print(L"%a", error->expression);
+    set_colors(EFI_RED);
+    Print(L"' in ");
+    set_colors(EFI_LIGHTRED);
+    Print(L"%a:%lu\n\n", context->file_name, error->line_number);
+    reset_colors();
 }
 
 void print_test_results() {
@@ -104,7 +116,6 @@ void print_test_results() {
     }
     reset_colors();
     Print(L"%lu/%lu tests passed in total\n\n", g_test_pass_count, g_test_count);
-    print_errors();
 }
 
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE* sys_table) {
@@ -185,6 +196,7 @@ BOOLEAN efitest_uuid_compare(const EFITestUUID* value1, const EFITestUUID* value
 
 void efitest_on_pre_run_group(EFITestContext* context) {
     g_group_pass_count = 0;
+    g_group_error_count = 0;
     Print(L"[------] Running test group '%a'..\n", context->group_name);
 
     if(g_pre_group_callback != NULL) {
@@ -211,6 +223,10 @@ void efitest_on_post_run_group(EFITestContext* context) {
     if(g_post_group_callback != NULL) {
         g_post_group_callback(context);
     }
+
+    for(UINTN index = 0; index < g_group_error_count; ++index) {
+        print_error(efitest_errors_get_last() - index);
+    }
 }
 
 void efitest_on_pre_run_test(EFITestContext* context) {
@@ -224,6 +240,9 @@ void efitest_on_post_run_test(EFITestContext* context) {
     if(!context->failed) {
         ++g_group_pass_count;
         ++g_test_pass_count;
+    }
+    else {
+        ++g_group_error_count;
     }
 
     if(g_post_test_callback != NULL) {
@@ -287,6 +306,10 @@ void efitest_errors_add(const EFITestError* error) {
 
 const EFITestError* efitest_errors_get() {
     return g_errors;
+}
+
+const EFITestError* efitest_errors_get_last() {
+    return &(g_errors[g_error_count - 1]);
 }
 
 UINTN efitest_errors_get_count() {

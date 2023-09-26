@@ -100,6 +100,7 @@ void efitest_set_post_test_callback(EFITestCallback callback);
 
 void efitest_errors_add(const EFITestError* error);
 const EFITestError* efitest_errors_get();
+const EFITestError* efitest_errors_get_last();
 UINTN efitest_errors_get_count();
 void efitest_errors_clear();
 BOOLEAN efitest_errors_compare(const EFITestError* error1, const EFITestError* error2);
