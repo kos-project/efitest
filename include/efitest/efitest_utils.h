@@ -60,6 +60,9 @@ static inline void* malloc_impl(UINTN size) {
 }
 
 static inline void free_impl(void* address) {
+    if(address == NULL) {
+        return;
+    }
     UEFI_CALL(ST->BootServices->FreePool, ((UINT8*) address) - sizeof(UINTN));
 }
 
