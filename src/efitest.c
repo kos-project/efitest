@@ -40,28 +40,6 @@ static UINT64 g_rand_z = 362436069;// Value suggested by author
 static UINT64 g_rand_w = 521288629;// Value suggested by author
 // NOLINTEND
 
-void cpu_yield() {
-#if defined(CPU_X86)
-    // https://www.amd.com/content/dam/amd/en/documents/processor-tech-docs/programmer-references/24593.pdf
-    // > Specifically section 6.5
-    __asm__ __volatile__("hlt");
-#elif defined(CPU_ARM)
-    // https://developer.arm.com/documentation/ka001283/latest
-    __asm__ __volatile__("wfi");
-#elif defined(CPU_RISCV)
-    // https://five-embeddev.com/riscv-isa-manual/latest/zihintpause.html
-    __asm__ __volatile__("pause");
-#else
-    /* NOP */
-#endif
-}
-
-_Noreturn static inline void cpu_halt() {
-    while(TRUE) {
-        cpu_yield();
-    }
-}
-
 /*
  * Implementation based on MWC generator described in
  * http://www.cse.yorku.ca/~oz/marsaglia-rng.html
@@ -137,10 +115,6 @@ __attribute__((unused)) EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_
     }
 
     free(g_errors);
-
-    if(g_error_count > 0) {
-        cpu_halt();
-    }
     shutdown();
 }
 
