@@ -18,5 +18,18 @@
 
 #include <efitest/efitest.h>
 
-ETEST_DEFINE_TEST(test_noop) {
+ETEST_DEFINE_TEST(test_noop1) {
 }
+
+ETEST_DEFINE_TEST(test_noop2) {
+}
+
+ETEST_DEFINE_TEST(test_noop3) {
+}
+
+//ETEST_DEFINE_TEST(test_noop4) {}
+
+/*
+ * ETEST_DEFINE_TEST(test_noop5) {
+ * }
+ */

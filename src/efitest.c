@@ -94,6 +94,7 @@ void print_test_result(const EFITestContext* context) {
 
 void print_error(const EFITestError* error) {
     render_code(error->expression, error->line_number);
+    Print(L"\n");
 }
 
 void print_test_results() {
@@ -136,12 +137,11 @@ __attribute__((unused)) EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_
     }
 
     free(g_errors);
-    if(g_error_count == 0) {
-        shutdown();
-    }
-    else {
+
+    if(g_error_count > 0) {
         cpu_halt();
     }
+    shutdown();
 }
 
 /*
@@ -222,8 +222,18 @@ void efitest_on_post_run_group(EFITestContext* context) {
         g_post_group_callback(context);
     }
 
-    for(UINTN index = 0; index < g_group_error_count; ++index) {
-        print_error(efitest_errors_get_last() - index);
+    if(g_group_error_count > 0) {
+        set_colors(EFI_BACKGROUND_BLACK | EFI_RED);
+        Print(L"Assertion%a in ", g_group_error_count == 1 ? "" : "s");
+        set_colors(EFI_BACKGROUND_BLACK | EFI_LIGHTRED);
+        Print(L"%a ", context->file_name);
+        set_colors(EFI_BACKGROUND_BLACK | EFI_RED);
+        Print(L"%a failed:\n\n", g_group_error_count == 1 ? "has" : "have");
+        reset_colors();
+
+        for(UINTN index = 0; index < g_group_error_count; ++index) {
+            print_error(efitest_errors_get_last() - ((g_group_error_count - 1) - index));
+        }
     }
 }
 
