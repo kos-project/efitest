@@ -4,9 +4,9 @@ project(${TARGET_NAME} LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 23)
 
-# Override current directory variables & append to module path to use parent's CMX installation
 set(CMAKE_CURRENT_BINARY_DIR "${PARENT_BINARY_DIR}") # Output to parent binary dir
 list(APPEND CMAKE_MODULE_PATH "${PARENT_SOURCE_DIR}/cmake")
+add_subdirectory(${PARENT_SOURCE_DIR} "${PARENT_BINARY_DIR}/submake")
 
 include(cmx-bootstrap)
 include(cmx-efi)

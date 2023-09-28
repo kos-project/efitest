@@ -1,7 +1,5 @@
 include_guard()
 
-add_subdirectory(${PARENT_SOURCE_DIR} "${PARENT_BINARY_DIR}/submake")
-
 macro(efitest_include_directories target access)
     target_include_directories(${target} ${access} ${ARGN})
 endmacro()
