@@ -104,10 +104,10 @@ macro(efitest_compile_definitions target access)
     # Dummy used by script injector
 endmacro()
 
-macro(efitest_set)
+macro(efitest_set name)
     # Dummy used by script injector
 endmacro()
 
-macro(efitest_unset)
+macro(efitest_unset name)
     # Dummy used by script injector
 endmacro()

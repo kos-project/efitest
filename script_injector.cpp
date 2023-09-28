@@ -52,14 +52,6 @@ static inline const std::unordered_map<MacroType, std::string> FUNCTION_NAMES = 
         {MacroType::SET, "efitest_set"},
         {MacroType::UNSET, "efitest_unset"}};
 
-static inline const std::unordered_map<MacroType, std::string> TRANSFORMED_FUNCTIONS = {
-        {MacroType::INCLUDE_DIRECTORIES, "target_include_directories"},
-        {MacroType::LINK_LIBRARIES, "target_link_libraries"},
-        {MacroType::COMPILE_OPTIONS, "target_compile_options"},
-        {MacroType::COMPILE_DEFINITIONS, "target_compile_definitions"},
-        {MacroType::SET, "set"},
-        {MacroType::UNSET, "unset"}};
-
 // Type definitions
 class Call {// NOLINT
     protected:
@@ -79,7 +71,6 @@ class Call {// NOLINT
     auto operator=(Call&&) noexcept -> Call& = delete;
 
     [[nodiscard]] virtual auto to_string() const noexcept -> std::string = 0;
-    [[nodiscard]] virtual auto transform() const noexcept -> std::string = 0;
 
     [[nodiscard]] inline auto get_type() const noexcept -> MacroType {
         return _type;
@@ -107,27 +98,6 @@ class VCall : public Call {
     [[nodiscard]] auto to_string() const noexcept -> std::string override {
         const auto fn_iter = FUNCTION_NAMES.find(_type);
         if(fn_iter == FUNCTION_NAMES.cend()) {
-            return "";
-        }
-        const auto& function = fn_iter->second;
-        if(_variadic_args.empty()) {
-            return fmt::format("{}()", function);
-        }
-
-        auto result = fmt::format("{}(", function);
-        for(auto iter = _variadic_args.cbegin(); iter < _variadic_args.cend(); ++iter) {
-            result += *iter;
-            if(iter != _variadic_args.cend() - 1) {
-                result += ' ';
-            }
-        }
-        result += ')';
-        return result;
-    }
-
-    [[nodiscard]] auto transform() const noexcept -> std::string override {
-        const auto fn_iter = TRANSFORMED_FUNCTIONS.find(_type);
-        if(fn_iter == TRANSFORMED_FUNCTIONS.cend()) {
             return "";
         }
         const auto& function = fn_iter->second;
@@ -205,27 +175,6 @@ class TargetedVCall : public VCall {
         return result;
     }
 
-    [[nodiscard]] auto transform() const noexcept -> std::string override {
-        const auto fn_iter = TRANSFORMED_FUNCTIONS.find(_type);
-        if(fn_iter == TRANSFORMED_FUNCTIONS.cend()) {
-            return "";
-        }
-        const auto& function = fn_iter->second;
-        if(_variadic_args.empty()) {
-            return fmt::format("{}({} {})", function, _target, _access);
-        }
-
-        auto result = fmt::format("{}({} {} ", function, _target, _access);
-        for(auto iter = _variadic_args.cbegin(); iter < _variadic_args.cend(); ++iter) {
-            result += *iter;
-            if(iter != _variadic_args.cend() - 1) {
-                result += ' ';
-            }
-        }
-        result += ')';
-        return result;
-    }
-
     [[nodiscard]] inline auto get_target() const noexcept -> const std::string& {
         return _target;
     }
@@ -281,6 +230,24 @@ constexpr auto until_quote_or_rparen = [](char x) -> bool { return x == '"' || x
 // clang-format on
 // NOLINTEND
 
+template<typename I>
+inline auto push_string_state(I& current) noexcept -> bool {
+    if(*current == '"') {
+        ++current;
+        return true;
+    }
+    return false;
+}
+
+template<typename I>
+inline auto pop_string_state(I& current, bool& state) noexcept -> I& {
+    if(state) {
+        ++current;
+        state = false;
+    }
+    return current;
+}
+
 template<typename I, typename C>
 inline auto parse_varargs(I& current, I& end, C& call) noexcept -> void {
     std::remove_reference_t<decltype(current)> begin;
@@ -288,66 +255,75 @@ inline auto parse_varargs(I& current, I& end, C& call) noexcept -> void {
     while(current != end && *current != ')') {
         chomp(current, end, until_no_space);// NOLINT
         begin = current;
-        if(*current == '"') {
-            is_string = true;
-            ++current;
-        }
+        is_string = push_string_state(current);
         // clang-format off
         chomp(current, end, is_string ? until_quote_or_rparen : until_space_or_rparen);// NOLINT
         // clang-format on
-        call->add_vararg({begin, is_string ? ++current : current});
-        is_string = false;
+        call->add_vararg({begin, pop_string_state(current, is_string)});
     }
+}
+
+inline auto are_valid_paths(const std::vector<std::string>& values) noexcept -> std::optional<std::string> {
+    for(const auto& value : values) {
+        const auto is_string = value.starts_with('"') && value.ends_with('"');
+        const std::string_view view {is_string ? value.cbegin() + 1 : value.cbegin(),
+                                     is_string ? value.cend() - 1 : value.cend()};
+        if(!value.contains("${") && std::filesystem::exists(view)) {// If it contains a variable, we can't check
+            continue;
+        }
+        return std::make_optional(value);
+    }
+    return std::nullopt;
+}
+
+template<typename I>
+inline auto parse_targeted_vcall(MacroType type, bool& is_string, I& current, I& end, I& begin,
+                                 bool accepts_paths = false) noexcept -> std::unique_ptr<Call> {
+    auto call = std::make_unique<TargetedVCall>(type);
+
+    // Parse target
+    is_string = push_string_state(current);
+    chomp(current, end, is_string ? until_quote : until_space);// NOLINT
+    call->set_target({begin, pop_string_state(current, is_string)});
+
+    // Parse access
+    chomp(current, end, until_no_space);// NOLINT
+    begin = current;
+    is_string = push_string_state(current);
+    chomp(current, end, is_string ? until_quote : until_space);// NOLINT
+    call->set_access({begin, pop_string_state(current, is_string)});
+
+    // Parse varargs
+    parse_varargs(current, end, call);
+    // Validate if paths
+    if(accepts_paths) {
+        if(auto result = are_valid_paths(call->get_varargs()); result) {
+            fmt::println("Malformed path '{}' in macro, skipping", *result);
+            return nullptr;
+        }
+    }
+
+    return call;
 }
 
 template<typename I>
 inline auto parse_macro(MacroType type, I& current, I& end) noexcept -> std::unique_ptr<Call> {
     auto begin = current;
-
     auto is_string = false;
-    const auto push_string_state = [&is_string, &current]() {
-        if(*current == '"') {
-            is_string = true;
-            ++current;
-        }
-    };
-    const auto pop_string_state = [&is_string, &current]() -> I& {
-        if(is_string) {
-            ++current;
-            is_string = false;
-        }
-        return current;
-    };
 
     switch(type) {// clang-format off
         case MacroType::INCLUDE_DIRECTORIES:
+            return parse_targeted_vcall(type, is_string, current, end, begin, true);
         case MacroType::LINK_LIBRARIES:
         case MacroType::COMPILE_OPTIONS:
-        case MacroType::COMPILE_DEFINITIONS: {
-            auto result = std::make_unique<TargetedVCall>(type);
-
-            // Parse target
-            push_string_state();
-            chomp(current, end, is_string ? until_quote : until_space); // NOLINT
-            result->set_target({begin, pop_string_state()});
-
-            // Parse access
-            chomp(current, end, until_no_space); // NOLINT
-            begin = current;
-            push_string_state();
-            chomp(current, end, is_string ? until_quote : until_space); // NOLINT
-            result->set_access({begin, pop_string_state()});
-
-            // Parse varargs
-            parse_varargs(current, end, result);
-            return result;
-        }
+        case MacroType::COMPILE_DEFINITIONS:
+            return parse_targeted_vcall(type, is_string, current, end, begin);
         case MacroType::SET: {
             auto result = std::make_unique<VCall>(type);
             // Parse name
-            push_string_state();
+            is_string = push_string_state(current);
             chomp(current, end, is_string ? until_quote : until_space); // NOLINT
-            result->add_vararg({begin, pop_string_state()});
+            result->add_vararg({begin, pop_string_state(current, is_string)});
 
             // Parse varargs
             parse_varargs(current, end, result);
@@ -356,9 +332,9 @@ inline auto parse_macro(MacroType type, I& current, I& end) noexcept -> std::uni
         case MacroType::UNSET: {
             auto result = std::make_unique<VCall>(type);
             // Parse name
-            push_string_state();
+            is_string = push_string_state(current);
             chomp(current, end, is_string ? until_quote : until_space); // NOLINT
-            result->add_vararg({begin, pop_string_state()});
+            result->add_vararg({begin, pop_string_state(current, is_string)});
             return result;
         }
         default:
@@ -400,7 +376,7 @@ auto inject_dependencies(const std::filesystem::path& source_path, const std::fi
             if(!invocation) {
                 goto end;// NOLINT
             }
-            injection += fmt::format("{}\n", invocation->transform());
+            injection += fmt::format("{}\n", invocation->to_string());
             ++count;
             continue;
         }
@@ -425,7 +401,7 @@ auto main(int num_args, char** args) -> int {
             ("i,in", "Specify the path to the input file", cxxopts::value<std::string>())
             ("o,out", "Specify the path to the output file", cxxopts::value<std::string>());
     // clang-format on
-    option_specs.parse_positional({"in", "out"});
+    option_specs.parse_positional({"source", "in", "out"});
 
     try {
         const auto options = option_specs.parse(num_args, args);
