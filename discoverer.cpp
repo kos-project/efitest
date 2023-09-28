@@ -157,7 +157,9 @@ auto discover_tests(const std::filesystem::path& path) noexcept -> std::vector<T
             // clang-format on
 
             const auto line_number = std::count(source.begin(), name_begin, '\n') + 1;
-            tests.emplace_back(std::string {name_begin, current}, line_number);
+            std::string name {name_begin, current};
+            fmt::println("Found test '{}' in {}", name, path.string());
+            tests.emplace_back(std::move(name), line_number);
         }
 
         ++current;
@@ -285,36 +287,36 @@ auto process_sources(const std::filesystem::path& out_dir, const std::vector<Tar
 }
 
 auto main(int num_args, char** args) -> int {
-    cxxopts::Options options {"EFITEST Discoverer", "Test discovery service for the EFITEST framework"};
+    cxxopts::Options option_specs {"EFITEST Discoverer", "Test discovery service for the EFITEST framework"};
     // clang-format off
-    options.add_options()
+    option_specs.add_options()
             ("h,help", "Display a list of commands")
             ("v,version", "Display version information")
             ("o,out", "Specifies the path of the directory to generate sources into", cxxopts::value<std::string>())
             ("f,files", "Specifies the path to a file to scan for tests", cxxopts::value<std::vector<std::string>>());
     // clang-format on
-    options.parse_positional({"out", "files"});
+    option_specs.parse_positional({"out", "files"});
 
     try {
-        const auto result = options.parse(num_args, args);
+        const auto options = option_specs.parse(num_args, args);
 
-        if(result.count("help") > 0) {
-            fmt::println("{}", options.help());
+        if(options.count("help") > 0) {
+            fmt::println("{}", option_specs.help());
             return 0;
         }
 
-        if(result.count("version") > 0) {
+        if(options.count("version") > 0) {
             fmt::println("EFITEST Discoverer 1.0.0");
             return 0;
         }
 
-        const auto& file_strings = result["files"].as<std::vector<std::string>>();
+        const auto& file_strings = options["files"].as<std::vector<std::string>>();
         std::vector<std::filesystem::path> files {};
         for(const auto& file_string : file_strings) {
             files.emplace_back(file_string);
         }
 
-        const std::filesystem::path out_path {result["out"].as<std::string>()};
+        const std::filesystem::path out_path {options["out"].as<std::string>()};
         std::vector<Target> targets {};
 
         const auto start_time = std::chrono::system_clock::now();

@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 23)
 
 # Override current directory variables & append to module path to use parent's CMX installation
-set(CMAKE_CURRENT_BINARY_DIR ${PARENT_BINARY_DIR}) # Output to parent binary dir
+set(CMAKE_CURRENT_BINARY_DIR "${PARENT_BINARY_DIR}") # Output to parent binary dir
 list(APPEND CMAKE_MODULE_PATH "${PARENT_SOURCE_DIR}/cmake")
 
 include(cmx-bootstrap)
@@ -14,6 +14,7 @@ include(cmx-efi)
 file(GLOB_RECURSE EFITEST_SOURCE_FILES "${PARENT_SOURCE_DIR}/src/*.c")
 add_library(efitest STATIC ${EFITEST_SOURCE_FILES})
 cmx_include_efi(efitest PUBLIC)
+target_compile_options(efitest PUBLIC -ggdb3)
 target_include_directories(efitest PUBLIC "${PARENT_SOURCE_DIR}/include")
 if ((CMX_COMPILER_GCC OR CMX_COMPILER_CLANG) AND CMX_CPU_X86 AND CMX_CPU_64_BIT)
     target_compile_options(efitest PRIVATE -march=x86-64) # Disable SSE/AVX

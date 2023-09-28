@@ -116,18 +116,6 @@ static inline void render_gutter(UINTN line_number) {
     Print(L" ");
 }
 
-static inline UINTN count_lines(const char* buffer) {
-    UINTN result = 0;
-    char* current = (char*) buffer;
-    while(*current != '\0') {
-        if(*current == '\n') {
-            ++result;
-        }
-        ++current;
-    }
-    return ++result;
-}
-
 static inline BOOLEAN is_one_of(const char* chars, char value) {
     const UINTN length = strlen(chars);
     for(UINTN index = 0; index < length; ++index) {
@@ -322,8 +310,7 @@ void post_update_states() {
 }
 
 void render_code(const char* buffer, UINTN line_number) {// NOLINT
-    const UINTN lines = count_lines(buffer);
-    char* current = (char*) buffer;// Cast away const for a local copy
+    char* current = (char*) buffer;                      // Cast away const for a local copy
     UINTN line_index = 0;
     UINTN max_width = 0;
     UINTN width = 0;
