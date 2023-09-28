@@ -45,7 +45,7 @@ macro(efitest_add_tests target access)
             WORKING_DIRECTORY ${build_dir_path})
     add_custom_command(TARGET "${target}-efitest-inject"
             COMMAND efitest-script-injector
-            -s "${EFITEST_SOURCE_DIR}/CMakeLists.txt"
+            -s "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt"
             -i "${EFITEST_SOURCE_DIR}/cmake/efitest-build.cmake"
             -o "${generated_dir_path}/CMakeLists.txt"
             WORKING_DIRECTORY ${generated_dir_path})
