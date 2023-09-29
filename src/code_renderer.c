@@ -166,7 +166,14 @@ BOOLEAN handle_string_state(const char* current, UINTN* advance) {
     return FALSE;
 }
 
+static inline BOOLEAN is_keyword_anchor(char value) {
+    return !is_alpha(value) && !is_dec_digit(value) && value != '_';
+}
+
 BOOLEAN handle_keyword_state(const char* current, UINTN* advance) {
+    if(!is_keyword_anchor(*(current - 1))) {
+        return FALSE;
+    }
     for(UINTN index = 0; index < arraylen(g_keywords); ++index) {
         const char* keyword = g_keywords[index];
         const UINTN kw_length = strlen(keyword);
@@ -174,6 +181,10 @@ BOOLEAN handle_keyword_state(const char* current, UINTN* advance) {
             continue;
         }
         if(memcmp(keyword, current, kw_length) == 0) {
+            if(!is_keyword_anchor(*(current + kw_length))) {
+                return FALSE;
+            }
+
             *advance = kw_length;
             set_colors(EFI_LIGHTMAGENTA);
             return TRUE;
