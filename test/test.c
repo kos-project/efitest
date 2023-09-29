@@ -20,11 +20,11 @@
 #include <efitest/efitest_utils.h>
 
 ETEST_DEFINE_TEST(test_success) {
-    ETEST_ASSERT(TRUE);
+    ETEST_ASSERT((UINT8) 0x01);
 }
 
 ETEST_DEFINE_TEST(test_failure) {
-    ETEST_ASSERT(FALSE);
+    ETEST_ASSERT(-0x01 + 0x01);
 }
 
 ETEST_DEFINE_TEST(test_compare_success) {

@@ -151,15 +151,16 @@ BOOLEAN handle_string_state(const char* current, UINTN* advance) {
         }
         if(memcmp(prefix, current, prefix_length) == 0) {
             const char* lookahead = current + prefix_length;
-            while(*lookahead != '\0') {
-                if(*lookahead == '"' && *(lookahead - 1) != '\\') {
+            do {
+                const char prev_char = *(lookahead - 1);
+                const char curr_char = *(lookahead++);
+                if(curr_char == '"' && prev_char != '\\') {
                     const UINTN text_length = ((UINTN) lookahead) - ((UINTN) current);
                     *advance = (text_length + 1);
                     set_colors(EFI_LIGHTGREEN);
                     return TRUE;
                 }
-                ++lookahead;
-            }
+            } while(*lookahead != '\0');
         }
     }
     return FALSE;
@@ -174,52 +175,30 @@ BOOLEAN handle_keyword_state(const char* current, UINTN* advance) {
         }
         if(memcmp(keyword, current, kw_length) == 0) {
             const char* lookahead = current + kw_length;
-            while(*lookahead != '\0') {
-                if(*lookahead == ' ') {
+            do {
+                const char curr_char = *(lookahead++);
+                if(curr_char == ' ') {
                     *advance = kw_length;
                     set_colors(EFI_LIGHTMAGENTA);
                     return TRUE;
                 }
-                ++lookahead;
-            }
+            } while(*lookahead != '\0');
         }
     }
     return FALSE;
 }
 
-static inline void handle_number_state_internal(const char* current, UINTN* advance) {
-    const char* lookahead = current;
-    while(*lookahead != '\0') {
-        const char curr_char = *lookahead;
-        if(!is_digit(curr_char) && !is_one_of(g_number_chars, curr_char)) {
-            *advance = ((UINTN) lookahead) - ((UINTN) current);
-            set_colors(EFI_LIGHTCYAN);
-            return;
-        }
-        ++lookahead;
-    }
-}
-
-BOOLEAN handle_number_state(const char* begin, const char* current, UINTN* advance) {
-    const char* lookback = current;
-    while(lookback != begin) {
-        const char curr_char = *lookback;
-        if(curr_char == ' ') {
-            break;
-        }
-        if(is_alpha(curr_char) || curr_char == '_') {
-            return FALSE;
-        }
-        --lookback;
-    }
-
-    if(*current == '-') {
-        handle_number_state_internal(current + 1, advance);
-        return TRUE;
-    }
-    if(is_dec_digit(*current)) {
-        handle_number_state_internal(current, advance);
-        return TRUE;
+BOOLEAN handle_number_state(const char* current, UINTN* advance) {
+    if(is_dec_digit(*current) || *current == '-') {
+        const char* lookahead = current;
+        do {
+            const char curr_char = *(++lookahead);
+            if(!is_digit(curr_char) && !is_one_of(g_number_chars, curr_char)) {
+                *advance = ((UINTN) lookahead) - ((UINTN) current);
+                set_colors(EFI_LIGHTCYAN);
+                return TRUE;
+            }
+        } while(*lookahead != '\0');
     }
     return FALSE;
 }
@@ -259,7 +238,7 @@ BOOLEAN handle_identifier_state(const char* current, UINTN* advance) {
     return FALSE;
 }
 
-UINTN update_state(const char* begin, const char* current) {
+UINTN update_state(const char* current) {
     UINTN advance = 1;
 
     if(handle_string_state(current, &advance)) {
@@ -268,7 +247,7 @@ UINTN update_state(const char* begin, const char* current) {
     if(handle_keyword_state(current, &advance)) {
         return advance;
     }
-    if(handle_number_state(begin, current, &advance)) {
+    if(handle_number_state(current, &advance)) {
         return advance;
     }
     if(handle_operator_state(current, &advance)) {
@@ -297,7 +276,7 @@ void render_code(const char* buffer, UINTN line_number) {// NOLINT
         }
 
         reset_colors();
-        const UINTN advance = update_state(buffer, current);
+        const UINTN advance = update_state(current);
 
         if(advance < STACK_BUFFER_SIZE) {
             memset(stack_buffer, '\0', advance + 1);
