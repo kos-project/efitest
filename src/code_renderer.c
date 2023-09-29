@@ -166,12 +166,12 @@ BOOLEAN handle_string_state(const char* current, UINTN* advance) {
     return FALSE;
 }
 
-static inline BOOLEAN is_keyword_anchor(char value) {
+static inline BOOLEAN is_keyword_anchor(const char value) {
     return !is_alpha(value) && !is_dec_digit(value) && value != '_';
 }
 
-BOOLEAN handle_keyword_state(const char* current, UINTN* advance) {
-    if(!is_keyword_anchor(*(current - 1))) {
+BOOLEAN handle_keyword_state(const char* begin, const char* current, UINTN* advance) {
+    if(current != begin && !is_keyword_anchor(*(current - 1))) {
         return FALSE;
     }
     for(UINTN index = 0; index < arraylen(g_keywords); ++index) {
@@ -243,13 +243,13 @@ BOOLEAN handle_identifier_state(const char* current, UINTN* advance) {
     return FALSE;
 }
 
-UINTN update_state(const char* current) {
+UINTN update_state(const char* begin, const char* current) {
     UINTN advance = 1;
 
     if(handle_string_state(current, &advance)) {
         return advance;
     }
-    if(handle_keyword_state(current, &advance)) {
+    if(handle_keyword_state(begin, current, &advance)) {
         return advance;
     }
     if(handle_number_state(current, &advance)) {
@@ -281,7 +281,7 @@ void render_code(const char* buffer, UINTN line_number) {// NOLINT
         }
 
         reset_colors();
-        const UINTN advance = update_state(current);
+        const UINTN advance = update_state(buffer, current);
 
         if(advance < STACK_BUFFER_SIZE) {
             memset(stack_buffer, '\0', advance + 1);
