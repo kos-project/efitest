@@ -174,15 +174,9 @@ BOOLEAN handle_keyword_state(const char* current, UINTN* advance) {
             continue;
         }
         if(memcmp(keyword, current, kw_length) == 0) {
-            const char* lookahead = current + kw_length;
-            do {
-                const char curr_char = *(lookahead++);
-                if(curr_char == ' ') {
-                    *advance = kw_length;
-                    set_colors(EFI_LIGHTMAGENTA);
-                    return TRUE;
-                }
-            } while(*lookahead != '\0');
+            *advance = kw_length;
+            set_colors(EFI_LIGHTMAGENTA);
+            return TRUE;
         }
     }
     return FALSE;
