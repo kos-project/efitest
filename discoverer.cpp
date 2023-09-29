@@ -47,7 +47,11 @@ using namespace std::string_literals;
 
 static inline const std::string MACRO = "ETEST_DEFINE_TEST";
 static inline const std::string INIT_FILE_NAME = "init.c";
-static inline const std::string INCLUDE = "include";
+
+template<typename... ARGS>
+inline auto log(fmt::format_string<ARGS...> fmt, ARGS&&... args) noexcept -> void {
+    fmt::println("-- {}", fmt::format(fmt, std::forward<ARGS>(args)...));
+}
 
 inline auto read_file(const std::filesystem::path& path) noexcept -> std::string {
     std::ifstream stream {path};
@@ -158,7 +162,7 @@ auto discover_tests(const std::filesystem::path& path) noexcept -> std::vector<T
 
             const auto line_number = std::count(source.begin(), name_begin, '\n') + 1;
             std::string name {name_begin, current};
-            fmt::println("Found test '{}' in {}", name, path.string());
+            log("Found test '{}' in {}", name, path.string());
             tests.emplace_back(std::move(name), line_number);
         }
 
@@ -174,11 +178,10 @@ auto discover_tests(const std::filesystem::path& path) noexcept -> std::vector<T
                 const auto current_char = *current;
                 if(current_char == '\n' || current_char == '\t') {
                     name.erase(current);
-                    goto outer;
+                    break;
                 }
                 ++current;
             }
-        outer:// Allow to continue from inside loop
         }
     }
 
@@ -301,12 +304,12 @@ auto main(int num_args, char** args) -> int {
         const auto options = option_specs.parse(num_args, args);
 
         if(options.count("help") > 0) {
-            fmt::println("{}", option_specs.help());
+            log("{}", option_specs.help());
             return 0;
         }
 
         if(options.count("version") > 0) {
-            fmt::println("EFITEST Discoverer 1.0.0");
+            log("EFITEST Discoverer 1.0.0");
             return 0;
         }
 
@@ -323,7 +326,7 @@ auto main(int num_args, char** args) -> int {
 
         for(const auto& file : files) {
             if(!std::filesystem::exists(file)) {
-                fmt::println("File {} does not exist, skipping", file.string());
+                log("File {} does not exist, skipping", file.string());
                 continue;
             }
 
@@ -341,12 +344,12 @@ auto main(int num_args, char** args) -> int {
         for(const auto& target : targets) {
             num_tests += target.tests.size();
         }
-        fmt::println("Discovered {} tests in {}ms", num_tests, time);
+        log("Discovered {} tests in {}ms", num_tests, time);
 
         process_sources(out_path, targets);
     }
     catch(...) {
-        fmt::println("Could not parse arguments, try -h to get help");
+        log("Could not parse arguments, try -h to get help");
         return 1;
     }
 
