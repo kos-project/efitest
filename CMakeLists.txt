@@ -52,7 +52,7 @@ macro (efitest_add_tests target access)
     execute_process(COMMAND "${CMAKE_CURRENT_BINARY_DIR}/efitest-prebuild/efitest-discoverer"
             -o ${generated_dir}
             -f ${file_flags}
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
     # Define actual test executable
     cmx_add_efi_executable(${target} ${access} ${generated_dir})
     target_link_libraries(${target} PRIVATE efitest)
