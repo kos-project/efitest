@@ -19,11 +19,12 @@
 #include "code_renderer.h"
 #include "efitest/efitest_utils.h"
 
+#define STACK_BUFFER_SIZE 1024
+
 // NOLINTBEGIN
 static const char* g_dec_digits = "0123456789";
 static const char* g_hex_digits = "0123456789aAbBcCdDeEfF";
 static const char* g_number_chars = "xXbBuUlLfF.";
-static const char* g_alpha_chars = "aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ";
 static const char* g_string_prefixes[] = {"L\"", "u\"", "U\"", "u8\"", "u16\"", "u32\"", "\""};
 // clang-format off
 static const char* g_keywords[] = {
@@ -101,12 +102,6 @@ static const char* g_operators[] = {
         "+", "-", "*", "/", "%", "~", "!"
 };
 // clang-format on
-static UINTN g_keyword_count = 0;
-static UINTN g_string_prefix_count = 0;
-static UINTN g_string_count = 0;
-static UINTN g_number_count = 0;
-static UINTN g_operator_count = 0;
-static UINTN g_identifier_count = 0;
 // NOLINTEND
 
 static inline void render_gutter(UINTN line_number) {
@@ -144,203 +139,184 @@ static inline BOOLEAN is_digit(char value) {
 }
 
 static inline BOOLEAN is_alpha(char value) {
-    return is_one_of(g_alpha_chars, value);
+    return (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z');
 }
 
-void update_colors() {
-    if(g_string_prefix_count > 0) {
-        set_colors(EFI_BACKGROUND_BLACK | EFI_LIGHTMAGENTA);// Same as keywords
-        return;
-    }
-    if(g_string_count > 0) {
-        set_colors(EFI_BACKGROUND_BLACK | EFI_LIGHTGREEN);
-        return;
-    }
-    if(g_keyword_count > 0) {
-        set_colors(EFI_BACKGROUND_BLACK | EFI_LIGHTMAGENTA);
-        return;
-    }
-    if(g_number_count > 0) {
-        set_colors(EFI_BACKGROUND_BLACK | EFI_LIGHTCYAN);
-        return;
-    }
-    if(g_operator_count > 0) {
-        set_colors(EFI_BACKGROUND_BLACK | EFI_WHITE);
-        return;
-    }
-    if(g_identifier_count > 0) {
-        set_colors(EFI_BACKGROUND_BLACK | EFI_YELLOW);
-        return;
-    }
-    reset_colors();
-}
-
-void handle_string_state(const char* current) {
-    if(g_string_count == 0) {
-        for(UINTN index = 0; index < arraylen(g_string_prefixes); ++index) {
-            const char* prefix = g_string_prefixes[index];
-            const UINTN prefix_length = strlen(prefix);
-            if(strlen(current) < prefix_length) {
-                continue;
-            }
-            if(memcmp(prefix, current, prefix_length) == 0) {
-                const char* lookahead = current + prefix_length;
-                while(*lookahead != '\0') {
-                    if(*lookahead == '"' && *(lookahead - 1) != '\\') {
-                        const UINTN text_length = ((UINTN) lookahead) - ((UINTN) current);
-                        if(prefix_length > 1) {
-                            g_string_prefix_count = prefix_length - 1;// Highlight prefixes in keyword color
-                        }
-                        g_string_count = text_length + 1;// One extra for the closing "
-                        return;
-                    }
-                    ++lookahead;
+BOOLEAN handle_string_state(const char* current, UINTN* advance) {
+    for(UINTN index = 0; index < arraylen(g_string_prefixes); ++index) {
+        const char* prefix = g_string_prefixes[index];
+        const UINTN prefix_length = strlen(prefix);
+        if(strlen(current) < prefix_length) {
+            continue;
+        }
+        if(memcmp(prefix, current, prefix_length) == 0) {
+            const char* lookahead = current + prefix_length;
+            while(*lookahead != '\0') {
+                if(*lookahead == '"' && *(lookahead - 1) != '\\') {
+                    const UINTN text_length = ((UINTN) lookahead) - ((UINTN) current);
+                    *advance = (text_length + 1);
+                    set_colors(EFI_LIGHTGREEN);
+                    return TRUE;
                 }
+                ++lookahead;
             }
         }
     }
+    return FALSE;
 }
 
-void handle_keyword_state(const char* current) {
-    if(g_string_count == 0 && g_keyword_count == 0) {
-        for(UINTN index = 0; index < arraylen(g_keywords); ++index) {
-            const char* keyword = g_keywords[index];
-            const UINTN kw_length = strlen(keyword);
-            if(strlen(current) < kw_length) {
-                continue;
-            }
-            if(memcmp(keyword, current, kw_length) == 0) {
-                const char* lookahead = current + kw_length;
-                while(*lookahead != '\0') {
-                    if(*lookahead == ' ') {
-                        g_keyword_count = kw_length;
-                        return;
-                    }
-                    ++lookahead;
+BOOLEAN handle_keyword_state(const char* current, UINTN* advance) {
+    for(UINTN index = 0; index < arraylen(g_keywords); ++index) {
+        const char* keyword = g_keywords[index];
+        const UINTN kw_length = strlen(keyword);
+        if(strlen(current) < kw_length) {
+            continue;
+        }
+        if(memcmp(keyword, current, kw_length) == 0) {
+            const char* lookahead = current + kw_length;
+            while(*lookahead != '\0') {
+                if(*lookahead == ' ') {
+                    *advance = kw_length;
+                    set_colors(EFI_LIGHTMAGENTA);
+                    return TRUE;
                 }
+                ++lookahead;
             }
         }
     }
+    return FALSE;
 }
 
-static inline void handle_number_state_internal(const char* current) {
+static inline void handle_number_state_internal(const char* current, UINTN* advance) {
     const char* lookahead = current;
     while(*lookahead != '\0') {
         const char curr_char = *lookahead;
         if(!is_digit(curr_char) && !is_one_of(g_number_chars, curr_char)) {
-            g_number_count = ((UINTN) lookahead) - ((UINTN) current);
+            *advance = ((UINTN) lookahead) - ((UINTN) current);
+            set_colors(EFI_LIGHTCYAN);
             return;
         }
         ++lookahead;
     }
 }
 
-void handle_number_state(const char* current) {
-    if(g_string_count == 0 && g_identifier_count == 0 && g_number_count == 0) {
-        if(*current == '-') {
-            handle_number_state_internal(current + 1);
-            return;
+BOOLEAN handle_number_state(const char* begin, const char* current, UINTN* advance) {
+    const char* lookback = current;
+    while(lookback != begin) {
+        const char curr_char = *lookback;
+        if(curr_char == ' ') {
+            break;
         }
-        if(is_dec_digit(*current)) {
-            handle_number_state_internal(current);
+        if(is_alpha(curr_char) || curr_char == '_') {
+            return FALSE;
         }
+        --lookback;
     }
+
+    if(*current == '-') {
+        handle_number_state_internal(current + 1, advance);
+        return TRUE;
+    }
+    if(is_dec_digit(*current)) {
+        handle_number_state_internal(current, advance);
+        return TRUE;
+    }
+    return FALSE;
 }
 
-void handle_operator_state(const char* current) {
-    if(g_string_count == 0 && g_operator_count == 0) {
-        for(UINTN index = 0; index < arraylen(g_operators); ++index) {
-            // clang-format off
+BOOLEAN handle_operator_state(const char* current, UINTN* advance) {
+    for(UINTN index = 0; index < arraylen(g_operators); ++index) {
+        // clang-format off
             const char* operator = g_operators[index]; // Clang format bug..
-            // clang-format on
-            const UINTN op_length = strlen(operator);
-            if(strlen(current) < op_length) {
-                continue;
-            }
-            if(memcmp(operator, current, op_length) == 0) {
-                g_operator_count = op_length;
-                return;
-            }
+        // clang-format on
+        const UINTN op_length = strlen(operator);
+        if(strlen(current) < op_length) {
+            continue;
+        }
+        if(memcmp(operator, current, op_length) == 0) {
+            *advance = op_length;
+            set_colors(EFI_WHITE);
+            return TRUE;
         }
     }
+    return FALSE;
 }
 
-void handle_identifier_state(const char* current) {
-    if(g_string_count == 0 && g_identifier_count == 0) {
-        const char* lookahead = current;
-        BOOLEAN is_first = TRUE;
-        while(*lookahead != '\0') {
-            if(!is_alpha(*lookahead) && *lookahead != '_' && !(!is_first && is_dec_digit(*lookahead))) {
-                g_identifier_count = ((UINTN) lookahead) - ((UINTN) current);
-                return;
-            }
-            ++lookahead;
-            is_first = FALSE;
+BOOLEAN handle_identifier_state(const char* current, UINTN* advance) {
+    if(!is_alpha(*current) && *current != '_') {
+        return FALSE;
+    }
+    const char* lookahead = current;
+    do {
+        const char curr_char = *(++lookahead);
+        if(!is_alpha(curr_char) && !is_dec_digit(curr_char) && curr_char != '_') {
+            *advance = ((UINTN) lookahead) - ((UINTN) current);
+            set_colors(EFI_YELLOW);
+            return TRUE;
         }
-    }
+    } while(*lookahead != '\0');
+
+    return FALSE;
 }
 
-void pre_update_states(const char* current) {
-    handle_string_state(current);
-    handle_keyword_state(current);
-    handle_number_state(current);
-    handle_operator_state(current);
-    handle_identifier_state(current);
-}
+UINTN update_state(const char* begin, const char* current) {
+    UINTN advance = 1;
 
-void post_update_states() {
-    if(g_string_prefix_count > 0) {
-        --g_string_prefix_count;
+    if(handle_string_state(current, &advance)) {
+        return advance;
     }
-    if(g_string_count > 0) {
-        --g_string_count;
+    if(handle_keyword_state(current, &advance)) {
+        return advance;
     }
-    if(g_keyword_count > 0) {
-        --g_keyword_count;
+    if(handle_number_state(begin, current, &advance)) {
+        return advance;
     }
-    if(g_number_count > 0) {
-        --g_number_count;
+    if(handle_operator_state(current, &advance)) {
+        return advance;
     }
-    if(g_operator_count > 0) {
-        --g_operator_count;
-    }
-    if(g_identifier_count > 0) {
-        --g_identifier_count;
-    }
+    handle_identifier_state(current, &advance);
+    return advance;
 }
 
 void render_code(const char* buffer, UINTN line_number) {// NOLINT
     char* current = (char*) buffer;                      // Cast away const for a local copy
     UINTN line_index = 0;
+    UINTN line_width = 0;
     UINTN max_width = 0;
-    UINTN width = 0;
 
     render_gutter(line_number);
+    char stack_buffer[STACK_BUFFER_SIZE];
+    void* heap_buffer = NULL;
 
     while(*current != '\0') {
-        pre_update_states(current);
-
-        // Handle new-lines and render additional gutters as needed
-        if(*current == '\n' || *(current + 1) == '\0') {
-            if(max_width < width) {
-                max_width = width;
-            }
-            width = 0;
-        }
         if(*current == '\n') {
             ++line_index;
             render_gutter(line_number + line_index);
+
+            line_width = 0;
         }
 
-        update_colors();
-        Print(L"%c", *current);
+        reset_colors();
+        const UINTN advance = update_state(buffer, current);
 
-        post_update_states();
+        if(advance < STACK_BUFFER_SIZE) {
+            memset(stack_buffer, '\0', advance + 1);
+            memcpy(stack_buffer, current, advance);
+            Print(L"%a", stack_buffer);
+        }
+        else {// Heap buffer for chunks > 1024 chars
+            heap_buffer = realloc(heap_buffer, advance + 1);
+            memset(heap_buffer, '\0', advance + 1);
+            memcpy(heap_buffer, current, advance);
+            Print(L"%a", heap_buffer);
+        }
 
-        ++current;
-        ++width;
+        current += advance;
+        line_width += advance;
+        if(max_width < line_width) {
+            max_width = line_width;
+        }
     }
-    ++max_width;
 
     Print(L"\n");
 
@@ -351,4 +327,6 @@ void render_code(const char* buffer, UINTN line_number) {// NOLINT
     }
     reset_colors();
     Print(L"\n");
+
+    free(heap_buffer);
 }

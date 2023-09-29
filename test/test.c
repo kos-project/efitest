@@ -20,10 +20,18 @@
 #include <efitest/efitest_utils.h>
 
 ETEST_DEFINE_TEST(test_success) {
-    ETEST_ASSERT_EQ(0x04, (sizeof(UINT16) << (UINT32) 0x01));
+    ETEST_ASSERT(TRUE);
 }
 
 ETEST_DEFINE_TEST(test_failure) {
+    ETEST_ASSERT(FALSE);
+}
+
+ETEST_DEFINE_TEST(test_compare_success) {
+    ETEST_ASSERT_EQ(0x04, (sizeof(UINT16) << (UINT32) 0x01));
+}
+
+ETEST_DEFINE_TEST(test_compare_failure) {
     ETEST_ASSERT_EQ(3.444F, (sizeof(UINTN) << (UINT32) 0x02));
 }
 

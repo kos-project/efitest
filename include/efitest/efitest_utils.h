@@ -36,8 +36,10 @@
 #define free(address) free_impl(address)
 #define realloc(address, size) realloc_impl(address, size)
 #define memcpy(dst, src, size) CopyMem(dst, src, size)
-#define memset(address, value, size) SetMem(address, value, size)
+#define memset(address, value, size) SetMem(address, size, value)
 #define memcmp(addr1, addr2, size) CompareMem(addr1, addr2, size)
+
+#define usable_size(address) (*(const UINTN*) (((const UINT8*) (address)) - sizeof(UINTN)))
 
 #define strlen(x) strlena((const UINT8*) (x))
 #define strcmp(a, b) strcmpa((const UINT8*) a, (const UINT8*) b)
@@ -69,7 +71,10 @@ static inline void free_impl(void* address) {
 static inline void* realloc_impl(void* address, UINTN size) {
     void* new_address = malloc(size);
     if(address != NULL) {
-        const UINTN old_size = *(const UINTN*) (((const UINT8*) address) - sizeof(UINTN));
+        const UINTN old_size = usable_size(address);
+        if(size <= old_size) {
+            return address;
+        }
         memcpy(new_address, address, old_size);
         free(address);
     }
