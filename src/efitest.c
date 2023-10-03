@@ -257,7 +257,9 @@ void efitest_logln(const UINT16* format, ...) {
 }
 
 void efitest_log_v(const UINT16* format, va_list args) {
-    Print(format, args);
+    UINT16* message = VPoolPrint(format, args);
+    Print(L"%s", message);
+    FreePool(message);
 }
 
 void efitest_log(const UINT16* format, ...) {
