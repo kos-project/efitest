@@ -243,10 +243,21 @@ void efitest_assert(BOOLEAN condition, EFITestContext* context, UINTN line_numbe
     }
 }
 
-void efitest_log_v(const UINT16* format, va_list args) {
+void efitest_logln_v(const UINT16* format, va_list args) {
     UINT16* message = VPoolPrint(format, args);
     Print(L"%s\n", message);
     FreePool(message);
+}
+
+void efitest_logln(const UINT16* format, ...) {
+    va_list args;
+    va_start(args, format);
+    efitest_log_v(format, args);
+    va_end(args);
+}
+
+void efitest_log_v(const UINT16* format, va_list args) {
+    Print(format, args);
 }
 
 void efitest_log(const UINT16* format, ...) {

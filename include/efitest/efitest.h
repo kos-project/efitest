@@ -88,6 +88,8 @@ void efitest_on_post_run_group(EFITestContext* context);
 void efitest_assert(BOOLEAN condition, EFITestContext* context, UINTN line_number, const char* expression);
 void efitest_log_v(const UINT16* format, va_list args);
 void efitest_log(const UINT16* format, ...);
+void efitest_logln_v(const UINT16* format, va_list args);
+void efitest_logln(const UINT16* format, ...);
 
 void efitest_set_pre_run_callback(EFITestRunCallback callback);
 void efitest_set_post_run_callback(EFITestRunCallback callback);
