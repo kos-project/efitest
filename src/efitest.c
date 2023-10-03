@@ -252,7 +252,7 @@ void efitest_logln_v(const UINT16* format, va_list args) {
 void efitest_logln(const UINT16* format, ...) {
     va_list args;
     va_start(args, format);
-    efitest_log_v(format, args);
+    efitest_logln_v(format, args);
     va_end(args);
 }
 
