@@ -245,7 +245,7 @@ void efitest_assert(BOOLEAN condition, EFITestContext* context, UINTN line_numbe
 
 void efitest_logln_v(const UINT16* format, va_list args) {
     UINT16* message = VPoolPrint(format, args);
-    Print(L"%s\n", message);
+    Print(L"[------] %s\n", message);
     FreePool(message);
 }
 
@@ -258,7 +258,7 @@ void efitest_logln(const UINT16* format, ...) {
 
 void efitest_log_v(const UINT16* format, va_list args) {
     UINT16* message = VPoolPrint(format, args);
-    Print(L"%s", message);
+    Print(L"[------] %s", message);
     FreePool(message);
 }
 
