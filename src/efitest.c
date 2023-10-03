@@ -59,11 +59,11 @@ _Noreturn void shutdown() {
 void print_test_result(const EFITestContext* context) {
     if(context->failed) {
         set_colors(EFI_RED);
-        Print(L"[FAILED] ");
+        Print(ETEST_SPACER_FAILED L" ");
     }
     else {
         set_colors(EFI_GREEN);
-        Print(L"[--OK--] ");
+        Print(ETEST_SPACER_OK L" ");
     }
     set_colors(EFI_WHITE);
     Print(L"%a\n", context->test_name);
@@ -76,14 +76,14 @@ void print_error(const EFITestError* error) {
 }
 
 void print_test_results() {
-    Print(L"[------] Test run finished!\n");
+    Print(ETEST_SPACER L" Test run finished!\n");
     if(g_test_pass_count < g_test_count) {
         set_colors(g_test_pass_count <= (g_test_count >> 1) ? EFI_RED : EFI_YELLOW);
-        Print(L"[FAILED] ");
+        Print(ETEST_SPACER_FAILED L" ");
     }
     else {
         set_colors(EFI_GREEN);
-        Print(L"[--OK--] ");
+        Print(ETEST_SPACER_OK L" ");
     }
     reset_colors();
     Print(L"%lu/%lu tests passed in total\n\n", g_test_pass_count, g_test_count);
@@ -169,7 +169,7 @@ BOOLEAN efitest_uuid_compare(const EFITestUUID* value1, const EFITestUUID* value
 void efitest_on_pre_run_group(EFITestContext* context) {
     g_group_pass_count = 0;
     g_group_error_count = 0;
-    Print(L"[------] Running test group '%a'..\n", context->group_name);
+    Print(ETEST_SPACER L" Running test group '%a'..\n", context->group_name);
 
     if(g_pre_group_callback != NULL) {
         g_pre_group_callback(context);
@@ -181,11 +181,11 @@ void efitest_on_post_run_group(EFITestContext* context) {
 
     if(g_group_pass_count < group_size) {
         set_colors(g_group_pass_count <= (group_size >> 1) ? EFI_RED : EFI_YELLOW);
-        Print(L"[FAILED] ");
+        Print(ETEST_SPACER_FAILED L" ");
     }
     else {
         set_colors(EFI_GREEN);
-        Print(L"[--OK--] ");
+        Print(ETEST_SPACER_OK L" ");
     }
     reset_colors();
     Print(L"%lu/%lu tests passed\n\n", g_group_pass_count, group_size);
@@ -245,7 +245,7 @@ void efitest_assert(BOOLEAN condition, EFITestContext* context, UINTN line_numbe
 
 void efitest_logln_v(const UINT16* format, va_list args) {
     UINT16* message = VPoolPrint(format, args);
-    Print(L"[------] %s\n", message);
+    Print(ETEST_SPACER L" %s\n", message);
     FreePool(message);
 }
 
@@ -258,7 +258,7 @@ void efitest_logln(const UINT16* format, ...) {
 
 void efitest_log_v(const UINT16* format, va_list args) {
     UINT16* message = VPoolPrint(format, args);
-    Print(L"[------] %s", message);
+    Print(L"%s", message);
     FreePool(message);
 }
 

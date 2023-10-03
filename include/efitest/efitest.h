@@ -71,6 +71,10 @@ typedef struct _EFITestError {
 
 #define ETEST_UUID_LENGTH 36
 
+#define ETEST_SPACER "[------]"
+#define ETEST_SPACER_OK "[--OK--]"
+#define ETEST_SPACER_FAILED "[FAILED]"
+
 ETEST_API_BEGIN
 
 typedef void (*EFITestCallback)(const EFITestContext* context);
