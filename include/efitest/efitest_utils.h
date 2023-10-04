@@ -26,7 +26,7 @@
     do {                                                                                                               \
         if(x != EFI_SUCCESS) {                                                                                         \
             set_colors(EFI_RED);                                                                                       \
-            efitest_log(L"[ERROR-] %r", x);                                                                            \
+            efitest_logf(L"[ERROR-] %r", x);                                                                           \
             reset_colors();                                                                                            \
             return __VA_ARGS__;                                                                                        \
         }                                                                                                              \

@@ -72,18 +72,18 @@ void print_test_result(const EFITestContext* context) {
 
 void print_error(const EFITestError* error) {
     render_code(error->expression, error->line_number);
-    Print(L"\n");
+    Print(L"\n", NULL);
 }
 
 void print_test_results() {
-    Print(ETEST_SPACER L" Test run finished!\n");
+    Print(ETEST_SPACER L" Test run finished!\n", NULL);
     if(g_test_pass_count < g_test_count) {
         set_colors(g_test_pass_count <= (g_test_count >> 1) ? EFI_RED : EFI_YELLOW);
-        Print(ETEST_SPACER_FAILED L" ");
+        Print(ETEST_SPACER_FAILED L" ", NULL);
     }
     else {
         set_colors(EFI_GREEN);
-        Print(ETEST_SPACER_OK L" ");
+        Print(ETEST_SPACER_OK L" ", NULL);
     }
     reset_colors();
     Print(L"%lu/%lu tests passed in total\n\n", g_test_pass_count, g_test_count);
@@ -97,10 +97,10 @@ __attribute__((unused)) EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_
     UEFI_CALL(sys_table->ConOut->ClearScreen, sys_table->ConOut);
 
     set_colors(EFI_BACKGROUND_BLUE | EFI_WHITE);
-    Print(L"== EFITEST Integrated Testing Environment ==\n");
-    Print(L"Copyright (C) 2023 Karma Krafts & associates\n");
+    Print(L"== EFITEST Integrated Testing Environment ==\n", NULL);
+    Print(L"Copyright (C) 2023 Karma Krafts & associates\n", NULL);
     reset_colors();
-    Print(L"\n");
+    Print(L"\n", NULL);
 
     if(g_pre_run_callback != NULL) {
         g_pre_run_callback();
@@ -166,107 +166,38 @@ BOOLEAN efitest_uuid_compare(const EFITestUUID* value1, const EFITestUUID* value
     return TRUE;
 }
 
-void efitest_on_pre_run_group(EFITestContext* context) {
-    g_group_pass_count = 0;
-    g_group_error_count = 0;
-    Print(ETEST_SPACER L" Running test group '%a'..\n", context->group_name);
-
-    if(g_pre_group_callback != NULL) {
-        g_pre_group_callback(context);
-    }
-}
-
-void efitest_on_post_run_group(EFITestContext* context) {
-    const UINTN group_size = context->group_size;
-
-    if(g_group_pass_count < group_size) {
-        set_colors(g_group_pass_count <= (group_size >> 1) ? EFI_RED : EFI_YELLOW);
-        Print(ETEST_SPACER_FAILED L" ");
-    }
-    else {
-        set_colors(EFI_GREEN);
-        Print(ETEST_SPACER_OK L" ");
-    }
-    reset_colors();
-    Print(L"%lu/%lu tests passed\n\n", g_group_pass_count, group_size);
-
-    g_test_count += group_size;
-
-    if(g_post_group_callback != NULL) {
-        g_post_group_callback(context);
-    }
-
-    if(g_group_error_count > 0) {
-        set_colors(EFI_BACKGROUND_BLACK | EFI_RED);
-        Print(L"Assertion%a in ", g_group_error_count == 1 ? "" : "s");
-        set_colors(EFI_BACKGROUND_BLACK | EFI_LIGHTRED);
-        Print(L"%a ", context->file_name);
-        set_colors(EFI_BACKGROUND_BLACK | EFI_RED);
-        Print(L"%a failed:\n\n", g_group_error_count == 1 ? "has" : "have");
-        reset_colors();
-
-        for(UINTN index = 0; index < g_group_error_count; ++index) {
-            print_error(efitest_errors_get_last() - ((g_group_error_count - 1) - index));
-        }
-    }
-}
-
-void efitest_on_pre_run_test(EFITestContext* context) {
-    if(g_pre_test_callback != NULL) {
-        g_pre_test_callback(context);
-    }
-}
-
-void efitest_on_post_run_test(EFITestContext* context) {
-    print_test_result(context);
-    if(!context->failed) {
-        ++g_group_pass_count;
-        ++g_test_pass_count;
-    }
-    else {
-        ++g_group_error_count;
-    }
-
-    if(g_post_test_callback != NULL) {
-        g_post_test_callback(context);
-    }
-}
-
-void efitest_assert(BOOLEAN condition, EFITestContext* context, UINTN line_number, const char* expression) {
-    if((context->failed = !condition)) {
-        EFITestError error;
-        efitest_uuid_generate(&(error.uuid));
-        error.context = *context;
-        error.line_number = line_number;
-        error.expression = expression;
-        efitest_errors_add(&error);
-    }
-}
-
-void efitest_logln_v(const UINT16* format, va_list args) {
+void efitest_loglnf_v(const UINT16* format, va_list args) {
     UINT16* message = VPoolPrint(format, args);
     Print(ETEST_SPACER L" %s\n", message);
     FreePool(message);
 }
 
-void efitest_logln(const UINT16* format, ...) {
+void efitest_loglnf(const UINT16* format, ...) {
     va_list args;
     va_start(args, format);
-    efitest_logln_v(format, args);
+    efitest_loglnf_v(format, args);
     va_end(args);
 }
 
-void efitest_log_v(const UINT16* format, va_list args) {
+void efitest_logf_v(const UINT16* format, va_list args) {
     UINT16* message = VPoolPrint(format, args);
     Print(L"%s", message);
     FreePool(message);
 }
 
-void efitest_log(const UINT16* format, ...) {
+void efitest_logf(const UINT16* format, ...) {
     va_list args;
     va_start(args, format);
-    efitest_log_v(format, args);
+    efitest_logf_v(format, args);
     va_end(args);
+}
+
+void efitest_log(const UINT16* message) {
+    efitest_logf(message, NULL);
+}
+
+void efitest_logln(const UINT16* message) {
+    efitest_loglnf(message, NULL);
 }
 
 void efitest_set_pre_run_callback(EFITestRunCallback callback) {
@@ -333,4 +264,83 @@ BOOLEAN efitest_errors_get_index(const EFITestError* error, UINTN* index) {
     }
     *index = 0;
     return FALSE;
+}
+
+void efitest_on_pre_run_group(EFITestContext* context) {
+    g_group_pass_count = 0;
+    g_group_error_count = 0;
+    Print(ETEST_SPACER L" Running test group '%a'..\n", context->group_name);
+
+    if(g_pre_group_callback != NULL) {
+        g_pre_group_callback(context);
+    }
+}
+
+// Internal functions
+
+void efitest_assert(BOOLEAN condition, EFITestContext* context, UINTN line_number, const char* expression) {
+    if((context->failed = !condition)) {
+        EFITestError error;
+        efitest_uuid_generate(&(error.uuid));
+        error.context = *context;
+        error.line_number = line_number;
+        error.expression = expression;
+        efitest_errors_add(&error);
+    }
+}
+
+void efitest_on_post_run_group(EFITestContext* context) {
+    const UINTN group_size = context->group_size;
+
+    if(g_group_pass_count < group_size) {
+        set_colors(g_group_pass_count <= (group_size >> 1) ? EFI_RED : EFI_YELLOW);
+        Print(ETEST_SPACER_FAILED L" ", NULL);
+    }
+    else {
+        set_colors(EFI_GREEN);
+        Print(ETEST_SPACER_OK L" ", NULL);
+    }
+    reset_colors();
+    Print(L"%lu/%lu tests passed\n\n", g_group_pass_count, group_size);
+
+    g_test_count += group_size;
+
+    if(g_post_group_callback != NULL) {
+        g_post_group_callback(context);
+    }
+
+    if(g_group_error_count > 0) {
+        set_colors(EFI_BACKGROUND_BLACK | EFI_RED);
+        Print(L"Assertion%a in ", g_group_error_count == 1 ? "" : "s");
+        set_colors(EFI_BACKGROUND_BLACK | EFI_LIGHTRED);
+        Print(L"%a ", context->file_name);
+        set_colors(EFI_BACKGROUND_BLACK | EFI_RED);
+        Print(L"%a failed:\n\n", g_group_error_count == 1 ? "has" : "have");
+        reset_colors();
+
+        for(UINTN index = 0; index < g_group_error_count; ++index) {
+            print_error(efitest_errors_get_last() - ((g_group_error_count - 1) - index));
+        }
+    }
+}
+
+void efitest_on_pre_run_test(EFITestContext* context) {
+    if(g_pre_test_callback != NULL) {
+        g_pre_test_callback(context);
+    }
+}
+
+void efitest_on_post_run_test(EFITestContext* context) {
+    print_test_result(context);
+    if(!context->failed) {
+        ++g_group_pass_count;
+        ++g_test_pass_count;
+    }
+    else {
+        ++g_group_error_count;
+    }
+
+    if(g_post_test_callback != NULL) {
+        g_post_test_callback(context);
+    }
 }
