@@ -3,6 +3,21 @@ C framework (C++ compatible) for writing freestanding UEFI unit tests
 using custom CMake modules & source generation.
 
 ### Code Example
+In your CMake script, add the following code to pull EFITEST 
+into your project using the [CMX build infrastructure](https://github.com/karmakrafts/cmx):
+
+```cmake
+append(LIST CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(cmx-bootstrap)
+include(cmx-efi)
+include(cmx-efitest)
+# Pull in all tests from test/ subdirectory recursively
+efitest_add_tests(my_test_target PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/test")
+```
+
+In your `test/` subdirectory, create a file `test.c` with the
+following contents:
+
 ```c
 #include <efitest/efitest.h>
 
