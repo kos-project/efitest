@@ -35,7 +35,7 @@ static EFITestCallback g_pre_test_callback = NULL;
 static EFITestCallback g_post_test_callback = NULL;
 static EFITestError* g_errors = NULL;
 static UINTN g_error_count = 0;
-// RNG statae
+// RNG state
 static UINT64 g_rand_z = 362436069;// Value suggested by author
 static UINT64 g_rand_w = 521288629;// Value suggested by author
 // NOLINTEND

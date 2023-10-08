@@ -20,11 +20,11 @@
 #include <efitest/efitest_utils.h>
 
 ETEST_DEFINE_TEST(test_success) {
-    ETEST_ASSERT(true);
+    ETEST_ASSERT(TRUE);
 }
 
 ETEST_DEFINE_TEST(test_failure) {
-    ETEST_ASSERT(false);
+    ETEST_ASSERT(FALSE);
 }
 
 ETEST_DEFINE_TEST(test_compare_success) {

@@ -29,8 +29,8 @@
 #include <string_view>
 #include <vector>
 
-#include <cxxopts.hpp>
-#include <fmt/format.h>
+#include "cxxopts.hpp"
+#include "fmt/format.h"
 
 struct Test {
     std::string name;
@@ -295,8 +295,10 @@ auto main(int num_args, char** args) -> int {
     option_specs.add_options()
             ("h,help", "Display a list of commands")
             ("v,version", "Display version information")
-            ("o,out", "Specifies the path of the directory to generate sources into", cxxopts::value<std::string>())
-            ("f,files", "Specifies the path to a file to scan for tests", cxxopts::value<std::vector<std::string>>());
+            ("o,out", "Specifies the path of the directory to generate sources into",
+                cxxopts::value<std::string>())
+            ("f,files", "Specifies the path to a file to scan for tests",
+                cxxopts::value<std::vector<std::string>>());
     // clang-format on
     option_specs.parse_positional({"out", "files"});
 
