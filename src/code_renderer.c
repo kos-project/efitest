@@ -106,7 +106,11 @@ static const char* g_operators[] = {
 
 static inline void render_gutter(UINTN line_number) {
     set_colors(EFI_BACKGROUND_LIGHTGRAY | EFI_BLACK);
+#ifdef ETEST_64_BIT
     Print(L"%-8lu", line_number);
+#else
+    Print(L"%-8u", line_number);
+#endif
     reset_colors();
     Print(L" ");
 }

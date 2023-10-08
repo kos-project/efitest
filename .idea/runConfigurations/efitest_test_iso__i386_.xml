@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="efitest-test-iso (i386)" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="-machine q35 -cpu max -net none -drive if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF32_CODE_4M.secboot.fd -drive if=pflash,format=raw,unit=1,file=/usr/share/OVMF/OVMF32_VARS_4M.fd -global driver=cfi.pflash01,property=secure,value=on -cdrom &quot;efitest-test.iso&quot; -m 512 -gdb tcp::44444 -nographic" REDIRECT_INPUT="false" ELEVATE="true" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="true" WORKING_DIR="file://$CMakeCurrentBuildDir$" PASS_PARENT_ENVS_2="true" PROJECT_NAME="efitest" TARGET_NAME="efitest-test-iso" CONFIG_NAME="Debug" RUN_PATH="/usr/local/bin/qemu-system-i386">
+    <method v="2">
+      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+    </method>
+  </configuration>
+</component>

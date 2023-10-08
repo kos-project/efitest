@@ -28,6 +28,14 @@
 #define ETEST_API_END
 #endif//__cplusplus
 
+#ifdef ETEST_64_BIT
+#define ETEST_FMT_UINTN "%lu"
+#define ETEST_FMT_INTN "%ld"
+#else
+#define ETEST_FMT_UINTN "%u"
+#define ETEST_FMT_INTN "%d"
+#endif
+
 ETEST_API_BEGIN
 
 #include <efi.h>

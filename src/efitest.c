@@ -86,10 +86,10 @@ void print_test_results() {
         Print(ETEST_SPACER_OK L" ", NULL);
     }
     reset_colors();
-    Print(L"%lu/%lu tests passed in total\n\n", g_test_pass_count, g_test_count);
+    Print(ETEST_FMT_UINTN "/" ETEST_FMT_UINTN L" tests passed in total\n\n", g_test_pass_count, g_test_count);
 }
 
-__attribute__((unused)) EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE* sys_table) {
+__attribute__((unused)) EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE* sys_table) {
     InitializeLib(image, sys_table);
     InitializeUnicodeSupport((UINT8*) "en-US");
 
@@ -301,7 +301,7 @@ void efitest_on_post_run_group(EFITestContext* context) {
         Print(ETEST_SPACER_OK L" ", NULL);
     }
     reset_colors();
-    Print(L"%lu/%lu tests passed\n\n", g_group_pass_count, group_size);
+    Print(ETEST_FMT_UINTN "/" ETEST_FMT_UINTN L" tests passed\n\n", g_group_pass_count, group_size);
 
     g_test_count += group_size;
 
